@@ -54,6 +54,7 @@
   --ink-dim: #5d6564;
   --accent: #101211;          /* what the Brushograph WebUI calls --black */
   --bad: #a8321f;
+  --warn: #8a5a12;
   --on-ground: var(--ink);    /* text straight on the ground, not on a panel */
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
@@ -65,14 +66,14 @@
     color-scheme: dark;
     --ground: #161918; --sheet: #1d2120; --sunk: #232726;
     --line: #313736; --line-soft: #272c2b;
-    --ink: #e6e9e8; --ink-dim: #9aa3a1; --accent: #f2f4f3; --bad: #e08a7a;
+    --ink: #e6e9e8; --ink-dim: #9aa3a1; --accent: #f2f4f3; --bad: #e08a7a; --warn: #d4a256;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
   --ground: #161918; --sheet: #1d2120; --sunk: #232726;
   --line: #313736; --line-soft: #272c2b;
-  --ink: #e6e9e8; --ink-dim: #9aa3a1; --accent: #f2f4f3; --bad: #e08a7a;
+  --ink: #e6e9e8; --ink-dim: #9aa3a1; --accent: #f2f4f3; --bad: #e08a7a; --warn: #d4a256;
 }
 /* Husk, flesh and a palm lit from behind. */
 :root[data-theme="coconut"] {
@@ -88,7 +89,7 @@
   color-scheme: dark;
   --ground: #0B0014; --sheet: #16032A; --sunk: #2C0857;
   --line: #FF6BB5; --line-soft: #3C0A66;
-  --ink: #FFEAF4; --ink-dim: #E3A0C0; --accent: #FF6BB5; --bad: #FF3860;
+  --ink: #FFEAF4; --ink-dim: #E3A0C0; --accent: #FF6BB5; --bad: #FF3860; --warn: #FFD400;
   --neon: #FF6BB5; --neon-cold: #00F5FF;
 }
 /* A pink sign with the lights up, and the rainbow in the chrome. */
@@ -96,7 +97,7 @@
   color-scheme: dark;
   --ground: #1a0416; --sheet: #2b0824; --sunk: #3a0c2f;
   --line: #ff2d95; --line-soft: #7d1f57;
-  --ink: #ffe8f6; --ink-dim: #ffb3de; --accent: #ff2d95; --bad: #ff6b6b;
+  --ink: #ffe8f6; --ink-dim: #ffb3de; --accent: #ff2d95; --bad: #ff6b6b; --warn: #fbbf24;
   --neon: #ff2d95; --neon-2: #ff8ad4;
   --glow: 0 0 6px rgba(255,45,149,.95), 0 0 20px rgba(255,45,149,.7);
   --pride: linear-gradient(90deg, #ff2d95, #ff6b3d, #ffd400, #4ade80, #22d3ee, #a855f7, #ff2d95);
@@ -106,7 +107,7 @@
   color-scheme: light;
   --ground: #dedcd5; --sheet: #f7f6f1; --sunk: #ebe9e1;
   --line: #000000; --line-soft: #555555;
-  --ink: #000000; --ink-dim: #2b2b2b; --accent: #000000; --bad: #8b0000;
+  --ink: #000000; --ink-dim: #2b2b2b; --accent: #000000; --bad: #8b0000; --warn: #6e4600;
   --mono: 'UnifrakturMaguntia', 'UnifrakturCook', 'Fraktur', serif;
   --sans: 'UnifrakturMaguntia', 'UnifrakturCook', 'Fraktur', serif;
 }
@@ -123,7 +124,7 @@
   color-scheme: dark;
   --ground: #020604; --sheet: #061009; --sunk: #08170c;
   --line: #1e5a2c; --line-soft: #0e2e16;
-  --ink: #2ee62e; --ink-dim: #2e9e3a; --accent: #33ff33; --bad: #66ff66;
+  --ink: #2ee62e; --ink-dim: #2e9e3a; --accent: #33ff33; --bad: #66ff66; --warn: #66ff66;
   --double: #1a8c1a; --phosphor: #33ff33; --hot: #66ff66; --on-green: #010a03;
   --mono: VT323, "Lucida Console", "Courier New", monospace;
   --sans: VT323, "Lucida Console", "Courier New", monospace;
@@ -226,6 +227,25 @@ button:hover { border-color: var(--ink-dim); }
 
 .note { margin: 12px 0 0; min-height: 1.5em; font-size: 14px; color: var(--on-ground); opacity: .85; }
 
+/* The server the picture comes from: under it, as wide as it, a panel of
+   figures rather than a box over the picture. */
+.server {
+  max-width: max(320px, calc((100vh - 170px) * var(--aspect, 1.7778)));
+  margin: 18px auto 0; padding: 14px 16px;
+  background: var(--sheet); border: 1px solid var(--line); border-radius: 6px;
+}
+.server h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.server-model { margin: 2px 0 0; font-size: 13px; color: var(--ink-dim); }
+.server-model:empty { display: none; }
+.server-stats {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px 18px; margin: 12px 0 0;
+}
+.server-stats dt { font-size: 12px; color: var(--ink-dim); }
+.server-stats dd { margin: 0; font: 600 15px/1.35 var(--mono); }
+.server-stats .bad { color: var(--bad); }
+.server-stats .warn { color: var(--warn); }
+
 @media (max-width: 760px) {
   .watch-full { right: 6px; top: 6px; }
 }
@@ -260,7 +280,7 @@ button:hover { border-color: var(--ink-dim); }
 :root[data-theme="coconut"] h1::after { content: " 🥥"; font-size: .85em; }
 :root[data-theme="coconut"] .sub, :root[data-theme="coconut"] .sub b,
 :root[data-theme="coconut"] footer, :root[data-theme="coconut"] header nav { color: #cfe8bd; }
-:root[data-theme="coconut"] .watch { border-width: 2px; border-radius: 16px; }
+:root[data-theme="coconut"] .watch, :root[data-theme="coconut"] .server { border-width: 2px; border-radius: 16px; }
 :root[data-theme="coconut"] .watch-overlay { border-width: 2px; border-radius: 12px; }
 
 /* -------------------------------------------------------------- pinkograph */
@@ -283,12 +303,14 @@ button:hover { border-color: var(--ink-dim); }
   animation: pk-hum-up 2.6s ease-in-out infinite;
 }
 :root[data-theme="pinkograph"] h1,
+:root[data-theme="pinkograph"] .server h2,
 :root[data-theme="pinkograph"] .watch-name,
 :root[data-theme="pinkograph"] .watch-pos dd {
   color: var(--neon);
   text-shadow: 0 0 6px rgba(255,107,181,.95), 0 0 18px rgba(255,107,181,.55);
 }
-:root[data-theme="pinkograph"] .watch, :root[data-theme="pinkograph"] .watch-overlay {
+:root[data-theme="pinkograph"] .watch, :root[data-theme="pinkograph"] .watch-overlay,
+:root[data-theme="pinkograph"] .server {
   border: 1px solid rgba(255,107,181,.75);
   box-shadow: 0 0 10px rgba(255,107,181,.48), 0 0 26px rgba(255,107,181,.26),
               inset 0 0 16px rgba(255,107,181,.10);
@@ -330,12 +352,13 @@ button:hover { border-color: var(--ink-dim); }
   filter: drop-shadow(0 0 9px rgba(255,45,149,.85));
   animation: pride-run 9s linear infinite, neon-flicker 6s infinite steps(1);
 }
-:root[data-theme="uwu"] .watch, :root[data-theme="uwu"] .watch-overlay {
+:root[data-theme="uwu"] .watch, :root[data-theme="uwu"] .watch-overlay,
+:root[data-theme="uwu"] .server {
   box-shadow: 0 0 0 1px rgba(255,45,149,.5), 0 0 26px -10px var(--neon),
               inset 0 0 30px -22px var(--neon-2);
 }
 :root[data-theme="uwu"] .watch-overlay { background: rgba(43,8,36,.86); }
-:root[data-theme="uwu"] .watch-name { color: #fff; text-shadow: var(--glow); }
+:root[data-theme="uwu"] .watch-name, :root[data-theme="uwu"] .server h2 { color: #fff; text-shadow: var(--glow); }
 :root[data-theme="uwu"] .watch-pos dd { color: var(--neon-2); text-shadow: 0 0 8px rgba(255,138,212,.55); }
 :root[data-theme="uwu"] .watch-bar i { background: var(--pride); background-size: 320% 100%; animation: pride-run 6s linear infinite; }
 :root[data-theme="uwu"] button, :root[data-theme="uwu"] .theme-picker select { background: var(--sunk); border-color: var(--neon); }
@@ -348,14 +371,15 @@ button:hover { border-color: var(--ink-dim); }
 /* ---------------------------------------------------------------- kongress */
 :root[data-theme="kongress"] body { font-size: 16px; line-height: 1.6; }
 :root[data-theme="kongress"] * { border-radius: 0; }
-:root[data-theme="kongress"] h1, :root[data-theme="kongress"] .watch-name {
+:root[data-theme="kongress"] h1, :root[data-theme="kongress"] .watch-name,
+:root[data-theme="kongress"] .server h2 {
   font-family: 'UnifrakturCook', 'UnifrakturMaguntia', 'Fraktur', serif;
   font-weight: 700; letter-spacing: .04em;
 }
 :root[data-theme="kongress"] h1 { font-size: 22px; }
 :root[data-theme="kongress"] header { border-bottom: 3px double #000; box-shadow: 0 2px 0 rgba(0,0,0,.08); }
 :root[data-theme="kongress"] footer { border-top: 3px double #000; box-shadow: 0 -2px 0 rgba(0,0,0,.08); }
-:root[data-theme="kongress"] .watch { border: 2px solid #000; box-shadow: 3px 3px 0 #000; }
+:root[data-theme="kongress"] .watch, :root[data-theme="kongress"] .server { border: 2px solid #000; box-shadow: 3px 3px 0 #000; }
 :root[data-theme="kongress"] .watch-overlay { border: 2px solid #000; box-shadow: 2px 2px 0 #000; background: rgba(247,246,241,.92); }
 :root[data-theme="kongress"] button, :root[data-theme="kongress"] .theme-picker select {
   background: var(--sheet); color: #000; border: 1.5px solid #000; box-shadow: 1px 1px 0 #000;
@@ -397,7 +421,8 @@ button:hover { border-color: var(--ink-dim); }
 }
 :root[data-theme="h4xx0r"] h1::after { content: "\2588"; margin-left: .3em; animation: h4x-blink 1s steps(1) infinite; }
 
-:root[data-theme="h4xx0r"] .watch, :root[data-theme="h4xx0r"] .watch-overlay {
+:root[data-theme="h4xx0r"] .watch, :root[data-theme="h4xx0r"] .watch-overlay,
+:root[data-theme="h4xx0r"] .server {
   border: 3px double var(--double);
   box-shadow: 0 0 0 1px rgba(51,255,51,.15), 0 0 18px rgba(51,255,51,.12),
               inset 0 0 24px rgba(51,255,51,.04);
@@ -409,6 +434,20 @@ button:hover { border-color: var(--ink-dim); }
 }
 :root[data-theme="h4xx0r"] .watch-name { font: .75em/1.5 var(--pixel); color: var(--phosphor); letter-spacing: .08em; }
 :root[data-theme="h4xx0r"] .watch-meta { font-size: .8em; }
+:root[data-theme="h4xx0r"] .server h2 {
+  font: 14px/1.6 var(--pixel); letter-spacing: .05em; text-transform: uppercase; color: var(--phosphor);
+}
+:root[data-theme="h4xx0r"] .server h2::before { content: "> "; }
+:root[data-theme="h4xx0r"] .server-model { font-size: 18px; }
+:root[data-theme="h4xx0r"] .server-stats dt { font: 11px/1.6 var(--pixel); letter-spacing: .05em; }
+:root[data-theme="h4xx0r"] .server-stats dd {
+  font-size: 24px; font-weight: 400; color: var(--phosphor); text-shadow: 0 0 4px rgba(51,255,51,.55);
+}
+/* An error is reverse video in the hot green, a warning underlined. */
+:root[data-theme="h4xx0r"] .server-stats .bad {
+  display: inline-block; padding: 0 .25em; background: var(--hot); color: var(--on-green); text-shadow: none;
+}
+:root[data-theme="h4xx0r"] .server-stats .warn { text-decoration: underline; text-underline-offset: .15em; }
 :root[data-theme="h4xx0r"] .watch-state { text-transform: uppercase; }
 :root[data-theme="h4xx0r"] .watch-state b { font-weight: 400; color: var(--phosphor); }
 :root[data-theme="h4xx0r"] .watch-state b::before { content: "> "; }
@@ -645,6 +684,23 @@ button:hover { border-color: var(--ink-dim); }
     <button type="button" class="watch-full" id="watch-full" hidden data-t>Full screen</button>
   </figure>
   <p class="note" id="watch-note"></p>
+
+  <section class="server" id="server" hidden>
+    <h2 data-t>Brušocam server</h2>
+    <p class="server-model" id="server-model"></p>
+    <dl class="server-stats">
+      <div id="srv-power-row"><dt data-t>Power</dt><dd id="srv-power"></dd></div>
+      <div id="srv-throttle-row"><dt data-t>Throttling</dt><dd id="srv-throttle"></dd></div>
+      <div id="srv-temp-row"><dt data-t>CPU temperature</dt><dd id="srv-temp"></dd></div>
+      <div id="srv-mhz-row"><dt data-t>CPU clock</dt><dd id="srv-mhz"></dd></div>
+      <div id="srv-load-row"><dt data-t>Load</dt><dd id="srv-load"></dd></div>
+      <div id="srv-mem-row"><dt data-t>Memory</dt><dd id="srv-mem"></dd></div>
+      <div id="srv-wifi-row"><dt data-t>Wi-Fi signal</dt><dd id="srv-wifi"></dd></div>
+      <div id="srv-tx-row"><dt data-t>Sending</dt><dd id="srv-tx"></dd></div>
+      <div id="srv-fps-row"><dt data-t>Stream</dt><dd id="srv-fps"></dd></div>
+      <div id="srv-uptime-row"><dt data-t>Uptime</dt><dd id="srv-uptime"></dd></div>
+    </dl>
+  </section>
 </main>
 <footer>
   <span class="brand">Brušocam</span> <span id="version"></span>
@@ -712,6 +768,40 @@ const DE = {
   "{n} viewer": "{n} Zuschauer",
   "{n} viewers": "{n} Zuschauer",
   "work coordinates": "Werkstückkoordinaten",
+  "{speed} mm/min": "{speed} mm/min",
+  "feed {pct}%": "Vorschub {pct} %",
+  "{speed} mm/min · feed {pct}%": "{speed} mm/min · Vorschub {pct} %",
+  "Brušocam server": "Brušocam-Server",
+  "Power": "Stromversorgung",
+  "Throttling": "Drosselung",
+  "CPU temperature": "Prozessortemperatur",
+  "CPU clock": "Prozessortakt",
+  "Load": "Last",
+  "Memory": "Arbeitsspeicher",
+  "Wi-Fi signal": "WLAN-Signal",
+  "Sending": "Senderate",
+  "Stream": "Datenstrom",
+  "Uptime": "Laufzeit",
+  "OK": "In Ordnung",
+  "Under-voltage!": "Unterspannung!",
+  "Under-voltage since boot": "Unterspannung seit dem Start",
+  "None": "Keine",
+  "Throttled": "Gedrosselt",
+  "Clock capped": "Takt begrenzt",
+  "Soft temperature limit": "Weiche Temperaturgrenze",
+  "Throttled since boot": "Gedrosselt seit dem Start",
+  "{t} °C": "{t} °C",
+  "{mhz} MHz": "{mhz} MHz",
+  "{used} of {total} MB": "{used} von {total} MB",
+  "{dbm} dBm · good": "{dbm} dBm · gut",
+  "{dbm} dBm · fair": "{dbm} dBm · mäßig",
+  "{dbm} dBm · weak": "{dbm} dBm · schwach",
+  "{n} kB/s": "{n} kB/s",
+  "{n} MB/s": "{n} MB/s",
+  "{fps} fps": "{fps} Bilder/s",
+  "{d} d {h} h": "{d} T {h} Std.",
+  "{h} h {m} min": "{h} Std. {m} Min.",
+  "{m} min": "{m} Min.",
   "machine coordinates": "Maschinenkoordinaten",
   "{pct}%": "{pct} %",
   "{bar} {pct}%": "{bar} {pct} %",
@@ -930,13 +1020,19 @@ const CLOCKS = {
     say(show.ascii, "{bar} {pct}%", { bar: asciiBar(pct), pct: pct.toFixed(1) });
   }
 
-  function heard(line, wcoText) {
+  function heard(line, wcoText, ovText) {
     if (!/^<.*>$/.test(line)) return;
     const s = parseStatus(line);
     const kind = s.state.split(":")[0];
     sayState(STATES[s.state] || STATES[kind] || s.state, BAD.has(kind));
+    // The speed it moves at, and the feed override it was dialled to, which
+    // like the work offset comes every few reports and is kept by Brušocam.
     const feed = s.FS ? Number(s.FS.split(",")[0]) : s.F ? Number(s.F) : 0;
-    show.feed.textContent = feed > 0 ? `${Math.round(feed)} mm/min` : "";
+    const override = (s.Ov || ovText || "").split(",")[0];
+    if (feed > 0 && override) say(show.feed, "{speed} mm/min · feed {pct}%", { speed: Math.round(feed), pct: override });
+    else if (feed > 0) say(show.feed, "{speed} mm/min", { speed: Math.round(feed) });
+    else if (override) say(show.feed, "feed {pct}%", { pct: override });
+    else say(show.feed, "");
 
     // Work coordinates, which are the figures in the G-code: what the machine
     // reports is its own position, and the offset between comes now and then,
@@ -981,10 +1077,74 @@ const CLOCKS = {
     }
   }
 
+  /* ---- the server ---- */
+  /* The firmware's throttled flags: bits 0-3 under-voltage, clock capped,
+     throttled and soft temperature limit now, bits 16-19 the same since boot.
+     What is wrong now is an error; what was wrong since boot, a warning. */
+  function serverRow(id, value, text, vars, level) {
+    $(`srv-${id}-row`).hidden = value === null || value === undefined;
+    if ($(`srv-${id}-row`).hidden) return;
+    const dd = $(`srv-${id}`);
+    say(dd, text, vars);
+    dd.className = level || "";
+  }
+
+  function uptimeOf(s) {
+    const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+    if (d) return ["{d} d {h} h", { d, h }];
+    if (h) return ["{h} h {m} min", { h, m }];
+    return ["{m} min", { m }];
+  }
+
+  function showServer(v) {
+    $("server").hidden = false;
+    $("server-model").textContent = v.model || "";
+
+    const f = v.throttled;
+    const known = (x) => x !== null && x !== undefined;
+    if (known(f)) {
+      if (f & 0x1) serverRow("power", f, "Under-voltage!", null, "bad");
+      else if (f & 0x10000) serverRow("power", f, "Under-voltage since boot", null, "warn");
+      else serverRow("power", f, "OK");
+      if (f & 0x4) serverRow("throttle", f, "Throttled", null, "bad");
+      else if (f & 0x2) serverRow("throttle", f, "Clock capped", null, "bad");
+      else if (f & 0x8) serverRow("throttle", f, "Soft temperature limit", null, "warn");
+      else if (f & 0xE0000) serverRow("throttle", f, "Throttled since boot", null, "warn");
+      else serverRow("throttle", f, "None");
+    } else {
+      // Only the alarm: under-voltage now, and nothing about throttling.
+      const u = v.undervoltage;
+      if (known(u)) serverRow("power", u, u ? "Under-voltage!" : "OK", null, u ? "bad" : "");
+      else serverRow("power", null);
+      serverRow("throttle", null);
+    }
+
+    // It throttles from about 80 °C.
+    serverRow("temp", v.temp, "{t} °C", { t: v.temp?.toFixed(1) },
+      v.temp >= 80 ? "bad" : v.temp >= 70 ? "warn" : "");
+    serverRow("mhz", v.mhz, "{mhz} MHz", { mhz: v.mhz });
+    serverRow("load", v.load, String(v.load?.toFixed(2)));
+    serverRow("mem", v.mem_total_kb || null, "{used} of {total} MB", {
+      used: Math.round((v.mem_total_kb - v.mem_available_kb) / 1024),
+      total: Math.round(v.mem_total_kb / 1024),
+    }, v.mem_available_kb < v.mem_total_kb * 0.1 ? "warn" : "");
+    const dbm = v.wifi_dbm;
+    serverRow("wifi", dbm,
+      dbm >= -60 ? "{dbm} dBm · good" : dbm >= -70 ? "{dbm} dBm · fair" : "{dbm} dBm · weak",
+      { dbm: String(dbm).replace("-", "\u2212") }, dbm < -70 ? "warn" : "");
+    const tx = v.tx_bps;
+    serverRow("tx", tx, tx >= 1e6 ? "{n} MB/s" : "{n} kB/s",
+      { n: tx >= 1e6 ? (tx / 1e6).toFixed(2) : Math.round(tx / 1e3) });
+    serverRow("fps", v.fps, "{fps} fps", { fps: v.fps?.toFixed(1) });
+    if (v.uptime_s === null || v.uptime_s === undefined) serverRow("uptime", null);
+    else serverRow("uptime", v.uptime_s, ...uptimeOf(v.uptime_s));
+  }
+
   function onEvent(ev) {
     eventAt = Date.now();
     let d;
     try { d = JSON.parse(ev.data); } catch (e) { return; }
+    if (d.server) showServer(d.server);
     if (typeof d.viewers === "number") {
       say(show.viewers, d.viewers === 1 ? "{n} viewer" : "{n} viewers", { n: d.viewers });
       show.viewers.hidden = false;
@@ -992,7 +1152,7 @@ const CLOCKS = {
     if (!host) return;
     if (d.connected) {
       say(note, "Watching {machine}.", { machine });
-      if (d.status) heard(d.status, d.wco);
+      if (d.status) heard(d.status, d.wco, d.ov);
     } else if (d.error) {
       sayState("Not connected", true);
       say(note, "{error}. Brušocam keeps trying.", { error: d.error });

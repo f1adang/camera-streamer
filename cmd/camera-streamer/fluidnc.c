@@ -17,6 +17,7 @@
 // viewers, the /fluidnc responses open, with or without a controller.
 
 #include "cmd/camera-streamer/fluidnc.h"
+#include "cmd/camera-streamer/server_stats.h"
 #include "util/http/http.h"
 #include "util/opts/log.h"
 
@@ -62,6 +63,7 @@ static struct {
   uint64_t heard_at;
   char status[FLUIDNC_LINE];
   char wco[128];
+  char ov[64];
   char error[FLUIDNC_ERROR];
 } fluidnc = {
   .lock = PTHREAD_MUTEX_INITIALIZER,
@@ -267,6 +269,20 @@ error:
   return -1;
 }
 
+// Copies the value of a report's field, "|WCO:" or "|Ov:", if it has it.
+static void fluidnc_keep(const char *line, const char *field, char *value, size_t len)
+{
+  const char *at = strstr(line, field);
+  if (!at)
+    return;
+  at += strlen(field);
+  size_t value_len = strcspn(at, "|>");
+  if (value_len < len) {
+    memcpy(value, at, value_len);
+    value[value_len] = 0;
+  }
+}
+
 // A line of the console. A status report is kept; anything else only says
 // the socket is alive.
 static void fluidnc_line(const char *line)
@@ -279,17 +295,11 @@ static void fluidnc_line(const char *line)
   if (len >= 2 && line[0] == '<' && line[len - 1] == '>') {
     snprintf(fluidnc.status, sizeof(fluidnc.status), "%s", line);
 
-    // The work offset comes in every few reports, not in each; it is kept,
-    // or a viewer that missed that one report could not give work positions.
-    const char *wco = strstr(line, "|WCO:");
-    if (wco) {
-      wco += 5;
-      size_t wco_len = strcspn(wco, "|>");
-      if (wco_len < sizeof(fluidnc.wco)) {
-        memcpy(fluidnc.wco, wco, wco_len);
-        fluidnc.wco[wco_len] = 0;
-      }
-    }
+    // The work offset and the overrides come in every few reports, not in
+    // each; they are kept, or a viewer that missed that one report could
+    // give neither work positions nor the feed override.
+    fluidnc_keep(line, "|WCO:", fluidnc.wco, sizeof(fluidnc.wco));
+    fluidnc_keep(line, "|Ov:", fluidnc.ov, sizeof(fluidnc.ov));
 
     fluidnc.seq++;
     pthread_cond_broadcast(&fluidnc.changed);
@@ -609,9 +619,10 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
     int viewers = fluidnc.viewers;
     bool connected = fluidnc.connected;
     uint64_t age = now_ms() - fluidnc.heard_at;
-    char status[FLUIDNC_LINE], wco[128], error[FLUIDNC_ERROR];
+    char status[FLUIDNC_LINE], wco[128], ov[64], error[FLUIDNC_ERROR];
     strcpy(status, connected ? fluidnc.status : "");
     strcpy(wco, fluidnc.wco);
+    strcpy(ov, fluidnc.ov);
     strcpy(error, fluidnc.error);
     pthread_mutex_unlock(&fluidnc.lock);
 
@@ -622,8 +633,12 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
     json_string(stream, status);
     fputs(",\"wco\":", stream);
     json_string(stream, wco);
+    fputs(",\"ov\":", stream);
+    json_string(stream, ov);
     fputs(",\"error\":", stream);
     json_string(stream, error);
+    fputs(",\"server\":", stream);
+    server_stats_json(stream);
     fputs("}\n\n", stream);
     bool gone = fflush(stream) || ferror(stream);
 

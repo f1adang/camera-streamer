@@ -41,12 +41,19 @@ wherever `/stream` does, through a proxy included; only camera-streamer has to r
 the controller. It relays the status reports as server-sent events on
 `http://<ip>:8080/fluidnc`:
 
-    data: {"viewers":2,"connected":true,"age":120,"status":"<Run|MPos:89.032,122.430,44.991|FS:494,0|SD:65.13,/sd/a.gcode>","wco":"-3.000,-14.000,46.000","error":""}
+    data: {"viewers":2,"connected":true,"age":120,"status":"<Run|MPos:89.032,122.430,44.991|FS:494,0|SD:65.13,/sd/a.gcode>","wco":"-3.000,-14.000,46.000","ov":"100,100,100","error":"","server":{"model":"Raspberry Pi Zero 2 W Rev 1.0","throttled":0,"temp":52.1,…}}
 
 `viewers` is the number of `/fluidnc` responses open, that is, of `/telemetry` pages being
 looked at (a hidden tab lets go), and is sent with or without a controller. `status` is the
-latest report as the controller sent it, and `wco` the work offset from the
-last report that carried one, since FluidNC sends it only every few reports. An event comes
+latest report as the controller sent it, and `wco` and `ov` the work offset and the overrides
+from the last report that carried them, since FluidNC sends those only every few reports.
+`server` is the health of the host camera-streamer runs on, shown on the page as "Brušocam
+server": the board's model from the device tree, the Raspberry Pi firmware's `throttled` flags
+(under-voltage, clock capped, throttled, soft temperature limit, now and since boot) or, on
+kernels without them, the `undervoltage` alarm, the CPU temperature and clock, the load,
+memory, the Wi-Fi signal in dBm, the bytes sent per second on every interface but the
+loopback, the stream's frames per second, and the uptime. They are read from `/proc` and
+`/sys` at most once a second; what the host does not have is `null`. An event comes
 with every report, and at least once a second. Behind nginx, `X-Accel-Buffering: no` is sent
 so the events are not held back; other proxies need response buffering off for `/fluidnc`.
 
