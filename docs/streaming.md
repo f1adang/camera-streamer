@@ -30,6 +30,11 @@ X, Y and Z in work coordinates, and the file being run with how far through it t
 controller has read. Give the controller with:
 
 - `--fluidnc-url=fluidnc.local` (or an address and port, `http://192.168.1.20`, `192.168.1.20:81`)
+- `--fluidnc-name=Testikel` to name it in the box over the picture; without it, the box shows the host name, less `.local`
+
+The page comes in the themes of the Brushograph WebUI, picked at its foot and remembered by the
+browser: h4xx0r (the default, glitches and all, full screen included), Default, Dark mode,
+Coconut mode, Pinkograph, UwU and Bruschologischer Kongress, which speaks German.
 
 camera-streamer connects to the controller, not the browser, so the page works from
 wherever `/stream` does, through a proxy included; only camera-streamer has to reach

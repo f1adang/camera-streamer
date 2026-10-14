@@ -195,6 +195,7 @@ extern "C" void camera_status_json(http_worker_t *worker, FILE *stream)
   }
 
   message["fluidnc"]["url"] = fluidnc_options.url;
+  message["fluidnc"]["name"] = fluidnc_options.name;
 
   http_write_response(stream, "200 OK", "application/json", message.dump().c_str(), 0);
 }
