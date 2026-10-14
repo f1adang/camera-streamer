@@ -41,9 +41,11 @@ wherever `/stream` does, through a proxy included; only camera-streamer has to r
 the controller. It relays the status reports as server-sent events on
 `http://<ip>:8080/fluidnc`:
 
-    data: {"connected":true,"age":120,"status":"<Run|MPos:89.032,122.430,44.991|FS:494,0|SD:65.13,/sd/a.gcode>","wco":"-3.000,-14.000,46.000","error":""}
+    data: {"viewers":2,"connected":true,"age":120,"status":"<Run|MPos:89.032,122.430,44.991|FS:494,0|SD:65.13,/sd/a.gcode>","wco":"-3.000,-14.000,46.000","error":""}
 
-`status` is the latest report as the controller sent it, and `wco` the work offset from the
+`viewers` is the number of `/fluidnc` responses open, that is, of `/telemetry` pages being
+looked at (a hidden tab lets go), and is sent with or without a controller. `status` is the
+latest report as the controller sent it, and `wco` the work offset from the
 last report that carried one, since FluidNC sends it only every few reports. An event comes
 with every report, and at least once a second. Behind nginx, `X-Accel-Buffering: no` is sent
 so the events are not held back; other proxies need response buffering off for `/fluidnc`.
