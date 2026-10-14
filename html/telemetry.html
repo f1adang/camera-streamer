@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telemetry</title>
+<style>
+/* The camera's picture with a FluidNC controller's state laid over it, in the
+ * h4xx0r theme of the FluidNC WebUI 3.0 (f1adang/ESP3D-WEBUI, release
+ * h4xx0r-theme-v0.1), as ported to the Brushograph WebUI.
+ *
+ *   ground #020604   panel  #061009   strip #08170c   lit   #0E2E16
+ *   ink    #2EE62E   bright #33FF33   hot   #66FF66   dim   #2E9E3A
+ *   rule   #1E5A2C   double #1A8C1A   on-green #010A03
+ *
+ * One green phosphor and nothing else: an error is the hot green in reverse
+ * video, not red. The glass is four fixed layers over the whole page:
+ * scanlines and a vignette that flicker (body::after), green static that
+ * drifts and thickens during a glitch (html::before), short dropout streaks
+ * (body::before) and a band of interference that rolls up the screen
+ * (html::after). The page loses the signal on a 9 s cycle, jitters a pixel at
+ * a time and powers on from a line.
+ *
+ * The fonts come from Google when the browser can reach it; a camera on a
+ * network without the internet falls back to the system's monospace. */
+@font-face {
+  font-family: 'VT323'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('https://fonts.gstatic.com/s/vt323/v18/pxiKyp0ihIEF2hsY.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Silkscreen'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('https://fonts.gstatic.com/s/silkscreen/v6/m8JXjfVPf62XiF7kO-i9ULQ.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Press Start 2P'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('https://fonts.gstatic.com/s/pressstart2p/v16/e3t4euO8T-267oIAQAu6jDQyK0nS.ttf') format('truetype');
+}
+:root {
+  color-scheme: dark;
+  --ground: #020604;
+  --sheet: #061009;
+  --sunk: #08170c;
+  --line: #1e5a2c;
+  --line-soft: #0e2e16;
+  --double: #1a8c1a;
+  --ink: #2ee62e;
+  --ink-dim: #2e9e3a;
+  --phosphor: #33ff33;
+  --hot: #66ff66;
+  --on-green: #010a03;
+  --mono: VT323, "Lucida Console", "Courier New", monospace;
+  --pixel: Silkscreen, VT323, "Courier New", monospace;
+  --title: "Press Start 2P", VT323, "Courier New", monospace;
+  scrollbar-color: #33ff33 #08170c;
+  scrollbar-width: thin;
+}
+* { box-sizing: border-box; border-radius: 0; font-synthesis: none; letter-spacing: .03em; }
+[hidden] { display: none !important; }
+html, body { margin: 0; padding: 0; }
+body {
+  min-height: 100vh; display: flex; flex-direction: column;
+  color: var(--ink); font: 20px/1.3 var(--mono);
+  background-color: var(--ground);
+  background-image: radial-gradient(ellipse at 50% 45%, rgba(51,255,51,.09) 0,
+                                    rgba(51,255,51,.02) 50%, transparent 80%);
+  background-attachment: fixed;
+  text-shadow: 0 0 1px rgba(51,255,51,.9), 1px 0 1px rgba(51,255,51,.35),
+               0 0 6px rgba(51,255,51,.45);
+}
+::selection { background: var(--phosphor); color: var(--on-green); text-shadow: none; }
+a { color: var(--phosphor); }
+a:hover { color: var(--hot); }
+
+/* Chrome: the bars, lit along their edges. */
+header, footer {
+  background: var(--sunk);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px;
+  padding: 12px max(16px, calc((100% - 1400px) / 2));
+}
+header { border-bottom: 1px solid var(--phosphor); box-shadow: 0 1px 12px rgba(51,255,51,.35); }
+footer {
+  margin-top: auto; justify-content: center; font-size: 17px; color: var(--ink-dim);
+  border-top: 1px solid var(--phosphor); box-shadow: 0 -1px 12px rgba(51,255,51,.35);
+}
+footer span { font-family: var(--pixel); font-size: 12px; color: var(--phosphor); }
+h1 {
+  margin: 0; font: 400 18px/1.6 var(--title); letter-spacing: .05em; text-transform: uppercase;
+  color: var(--phosphor); text-shadow: 0 0 6px rgba(51,255,51,.7);
+  animation: h4x-smear 6.1s infinite;
+}
+h1::after { content: "\2588"; margin-left: .3em; animation: h4x-blink 1s steps(1) infinite; }
+.sub { margin: 0; color: var(--ink-dim); overflow-wrap: anywhere; }
+.sub b { font-weight: 400; color: var(--phosphor); }
+header nav { margin-left: auto; }
+
+main { width: 100%; max-width: 1400px; margin: 0 auto; padding: 18px 16px 28px; }
+
+/* The picture and the figures over it are one element, so that full screen
+   takes both. */
+.watch {
+  position: relative; margin: 0; min-height: 240px; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--sunk);
+  border: 3px double var(--double);
+  box-shadow: 0 0 0 1px rgba(51,255,51,.15), 0 0 18px rgba(51,255,51,.12),
+              inset 0 0 24px rgba(51,255,51,.04);
+  /* Lettered in proportion to the picture rather than the window, so the
+     figures are as legible on a phone as on a screen across the room. */
+  container-type: inline-size;
+}
+/* As wide as fits the window's height, so the overlay at the picture's foot
+   is never below the fold. --aspect is the stream's, once it is known. */
+.watch { max-width: max(320px, calc((100vh - 170px) * var(--aspect, 1.7778))); margin: 0 auto; }
+.watch img { display: block; width: 100%; height: auto; }
+.watch:fullscreen { max-width: none; background: #000; border: 0; box-shadow: none; }
+.watch:fullscreen img { width: 100%; height: 100%; object-fit: contain; }
+/* Full screen is the top layer, out from under the page's glass, so the
+   picture brings its own scanlines with it. */
+.watch:fullscreen::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0, rgba(0,0,0,.35) 1px,
+                                        transparent 1px, transparent 3px);
+}
+.watch-empty { margin: 0; padding: 40px 24px; max-width: 56ch; text-align: center; color: var(--ink-dim); }
+
+.watch-overlay {
+  position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 24px);
+  padding: .4em .7em .5em;
+  background: rgba(6,16,9,.84);
+  border: 3px double var(--double);
+  box-shadow: 0 0 0 1px rgba(51,255,51,.15), 0 0 18px rgba(51,255,51,.18);
+  font: clamp(17px, 2.3cqi, 40px)/1.15 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+/* With no picture behind it, it stands in the frame rather than in a corner. */
+.watch-overlay.alone { position: static; margin: 24px; }
+.watch-overlay p { margin: 0; }
+.watch-state { text-transform: uppercase; }
+.watch-state b { font-weight: 400; color: var(--phosphor); }
+.watch-state b::before { content: "> "; }
+/* An alarm, an open door, a lost connection: reverse video in the hot green,
+   as the terminal prints an error. */
+.watch-state.bad b { background: var(--hot); color: var(--on-green); text-shadow: 0 0 6px rgba(102,255,102,.6); padding: 0 .25em; }
+.watch-state.bad b::before { content: "!! "; }
+.watch-state span { color: var(--ink-dim); margin-left: .5em; text-transform: none; }
+.watch-pos { display: flex; gap: 1.1em; margin: .2em 0 0; }
+.watch-pos div { display: flex; gap: .35em; align-items: baseline; }
+.watch-pos dt { font: .6em var(--pixel); color: var(--ink-dim); }
+/* Wide enough for -123.45 whatever the figure, so the row does not jitter
+   five times a second as a digit comes and goes. */
+.watch-pos dd {
+  margin: 0; min-width: 7ch; text-align: right; font-size: 1.5em;
+  color: var(--phosphor); text-shadow: 0 0 4px rgba(51,255,51,.55);
+}
+.watch-frame { font-size: .7em; color: var(--ink-dim); }
+.watch-job { margin-top: .35em; }
+.watch-file { overflow-wrap: anywhere; }
+.watch-bar { white-space: pre; color: var(--phosphor); }
+
+button, input { font: inherit; letter-spacing: .03em; }
+button {
+  cursor: pointer; text-transform: uppercase; padding: 3px 12px;
+  background: #0a1f10; color: var(--ink); border: 1px solid var(--line);
+  text-shadow: inherit; transition: box-shadow .15s, background .15s, color .15s;
+}
+button:hover {
+  background: var(--phosphor); border-color: var(--phosphor); color: var(--on-green);
+  box-shadow: 0 0 12px rgba(51,255,51,.6); text-shadow: none;
+}
+button.primary {
+  background: var(--phosphor); border-color: var(--phosphor); color: var(--on-green);
+  text-shadow: none; box-shadow: 0 0 12px rgba(51,255,51,.45);
+}
+button.primary:hover { background: var(--hot); border-color: var(--hot); }
+.watch-full { position: absolute; right: 12px; top: 12px; opacity: .85; }
+.watch:fullscreen .watch-full { display: none; }
+
+.note { margin: 12px 0 0; color: var(--ink-dim); min-height: 1.3em; }
+.note.error {
+  display: inline-block; padding: 0 .25em;
+  background: var(--hot); color: var(--on-green); text-shadow: 0 0 6px rgba(102,255,102,.6);
+}
+
+.watch-where { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 18px; }
+.watch-where label { display: flex; flex-direction: column; gap: 4px; flex: 0 1 340px; min-width: 0; }
+.watch-where label span { font: 12px var(--pixel); letter-spacing: .05em; color: var(--phosphor); }
+.watch-where input {
+  width: 100%; padding: 3px 8px;
+  background: var(--sheet); color: var(--ink); border: 1px solid var(--line);
+  text-shadow: inherit;
+}
+.watch-where input:focus {
+  outline: 1px solid var(--phosphor);
+  box-shadow: 0 0 0 .1rem var(--line-soft), 0 0 10px rgba(51,255,51,.4);
+}
+.watch-where input::placeholder { color: var(--ink-dim); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: var(--sunk); }
+::-webkit-scrollbar-thumb { background: var(--phosphor); box-shadow: 0 0 6px rgba(51,255,51,.6); }
+
+@media (max-width: 760px) {
+  h1 { font-size: 14px; }
+  .watch-overlay { left: 6px; bottom: 6px; max-width: calc(100% - 12px); padding: .3em .5em .4em; }
+  .watch-pos { gap: .7em; }
+  .watch-pos dd { min-width: 6ch; font-size: 1.3em; }
+  .watch-full { right: 6px; top: 6px; }
+}
+
+/* The glass. */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: 99999; pointer-events: none;
+  border-radius: 3vmin / 4vmin;
+  box-shadow: inset 0 0 3vmin .5vmin rgba(0,0,0,.7), inset 0 0 1.5vmin rgba(51,255,51,.15);
+  background:
+    repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0, rgba(0,0,0,.35) 1px, transparent 1px, transparent 3px),
+    radial-gradient(ellipse at center, transparent 65%, rgba(0,0,0,.4) 100%);
+  animation: h4x-flicker 3.7s steps(1) infinite;
+}
+:root::before {
+  content: ""; position: fixed; inset: -50%; z-index: 100000; pointer-events: none; opacity: .1;
+  background-image:
+    url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012 0.75' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.2 0 0 0 0 1 0 0 0 0 0.2 0 0 0 2.2 -1.1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23s)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: h4x-static .24s steps(4) infinite, h4x-snow 9s linear infinite,
+             h4x-snow-flicker .9s steps(1) infinite;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: 99997; pointer-events: none;
+  background-image:
+    linear-gradient(90deg, transparent, rgba(51,255,51,.65) 20%, rgba(51,255,51,.45) 80%, transparent),
+    linear-gradient(90deg, transparent, rgba(51,255,51,.5) 30%, rgba(51,255,51,.5) 70%, transparent),
+    linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.55)),
+    linear-gradient(90deg, rgba(51,255,51,.12), rgba(51,255,51,.2), rgba(51,255,51,.12));
+  background-repeat: no-repeat;
+  background-size: 9% 1px, 4% 2px, 100% 1px, 100% 2px;
+  background-position: 12% 23%, 70% 61%, 0 44%, 0 82%;
+  animation: h4x-dropout 1.3s steps(1) infinite;
+}
+:root::after {
+  content: ""; position: fixed; left: 0; right: 0; top: 0; height: 100vh;
+  z-index: 100001; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(51,255,51,.14) 0, rgba(51,255,51,.14) 1px,
+                                        transparent 1px, transparent 2px);
+  -webkit-backdrop-filter: blur(2px) brightness(1.5) contrast(1.2);
+          backdrop-filter: blur(2px) brightness(1.5) contrast(1.2);
+  clip-path: inset(100% 0 0 0);
+  animation: h4x-interference 9s linear infinite;
+}
+/* Not <body> itself: a transform there would fix the glass to the body rather
+   than the screen, and the vignette would scroll away with the page. */
+body > header, body > main, body > footer {
+  animation: h4x-signal 9s linear infinite, h4x-jitter 2.3s steps(1) infinite,
+             h4x-power-on 1.1s cubic-bezier(.2,.9,.3,1);
+}
+
+@keyframes h4x-flicker {
+  0%, 13%, 43%, 78%, 100% { opacity: 1; }
+  12% { opacity: .85; }
+  41%, 77% { opacity: .9; }
+  42% { opacity: .8; }
+}
+@keyframes h4x-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes h4x-static {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-7%, 4%); }
+  50% { transform: translate(5%, -6%); }
+  75% { transform: translate(-3%, -9%); }
+  100% { transform: translate(8%, 3%); }
+}
+@keyframes h4x-signal {
+  0%, 13.9%, 17.1%, 37.9%, 47.1%, 62.9%, 66.1%, 85.9%, 88.1%, 100% { transform: none; filter: none; }
+  14.2% { transform: translateX(-7px) skewX(-2.5deg); filter: brightness(1.3); }
+  14.6% { transform: translateX(5px) skewX(1.5deg); }
+  15.0% { transform: translateX(-3px) skewX(-.8deg); filter: brightness(1.1); }
+  15.6% { transform: translateX(2px) skewX(.4deg); }
+  16.4% { transform: translateX(-1px); filter: none; }
+  40% { transform: skewX(-.6deg) translateX(2px);
+        filter: brightness(.7) contrast(1.3) blur(.6px) drop-shadow(9px 0 0 rgba(51,255,51,.3)); }
+  42.5% { transform: skewX(.7deg) translateX(-2px);
+          filter: brightness(.6) contrast(1.4) blur(.8px) drop-shadow(12px 0 0 rgba(51,255,51,.3)); }
+  45% { transform: skewX(-.3deg); filter: brightness(.85) blur(.3px) drop-shadow(5px 0 0 rgba(51,255,51,.2)); }
+  46.5% { transform: none; filter: brightness(1.15); }
+  63.2% { transform: translateY(-12px) scaleY(1.01); filter: brightness(1.4); }
+  63.8% { transform: translateY(7px); filter: brightness(1.15); }
+  64.4% { transform: translateY(-4px); }
+  65.2% { transform: translateY(2px); filter: none; }
+  86.4% { transform: scale(.985, .99); filter: brightness(1.5) blur(.5px); }
+  87.2% { transform: scale(.992, .995); filter: brightness(1.25) blur(.3px); }
+}
+@keyframes h4x-interference {
+  0%, 13.9%, 17.1%, 37.9%, 47.1%, 62.9%, 66.1%, 100% { clip-path: inset(100% 0 0 0); }
+  14.2% { clip-path: inset(31% 0 66% 0); }
+  14.6% { clip-path: inset(34% 0 62% 0); }
+  15.0% { clip-path: inset(36% 0 62.5% 0); }
+  15.6% { clip-path: inset(100% 0 0 0); }
+  39% { clip-path: inset(72% 0 26% 0); }
+  40.5% { clip-path: inset(55% 0 41% 0); }
+  42% { clip-path: inset(38% 0 57% 0); }
+  43.5% { clip-path: inset(20% 0 77% 0); }
+  45% { clip-path: inset(6% 0 92.5% 0); }
+  46.5% { clip-path: inset(100% 0 0 0); }
+  63.2% { clip-path: inset(0 0 94% 0); }
+  63.8% { clip-path: inset(96% 0 0 0); }
+  64.4% { clip-path: inset(100% 0 0 0); }
+}
+@keyframes h4x-snow {
+  0%, 13.9%, 17.1%, 37%, 48%, 62.9%, 66.1%, 100% { opacity: .1; }
+  14.5% { opacity: .24; }
+  40% { opacity: .3; }
+  42% { opacity: .5; }
+  44% { opacity: .35; }
+  63.5% { opacity: .22; }
+  78% { opacity: .14; }
+  80% { opacity: .1; }
+}
+@keyframes h4x-snow-flicker {
+  0%, 100% { filter: brightness(1); }
+  13% { filter: brightness(1.5); }
+  37% { filter: brightness(.8); }
+  61% { filter: brightness(1.7); }
+  82% { filter: brightness(1.2); }
+}
+@keyframes h4x-dropout {
+  0%, 100% { background-position: 12% 23%, 70% 61%, 0 44%, 0 82%; opacity: 1; }
+  14% { background-position: 64% 8%, 22% 71%, 0 130%, 0 76%; opacity: .6; }
+  29% { background-position: 35% 52%, 90% 33%, 0 18%, 0 70%; opacity: 0; }
+  43% { background-position: 3% 66%, 38% 47%, 0 71%, 0 64%; opacity: 1; }
+  57% { background-position: 91% 29%, 76% 5%, 0 130%, 0 58%; opacity: .5; }
+  71% { background-position: 27% 95%, 14% 58%, 0 9%, 0 52%; opacity: 1; }
+  86% { background-position: 58% 17%, 83% 79%, 0 130%, 0 46%; opacity: 0; }
+}
+@keyframes h4x-jitter {
+  0%, 8%, 25%, 50%, 73%, 89%, 100% { translate: 0 0; }
+  7%, 24%, 72%, 88% { translate: 1px 0; }
+  23% { translate: -1px 0; }
+  49% { translate: 0 1px; }
+  71% { translate: -2px 0; }
+}
+@keyframes h4x-smear {
+  0%, 60%, 72%, 100% { transform: none; text-shadow: 0 0 6px rgba(51,255,51,.7); }
+  64% { transform: translateX(-1px);
+        text-shadow: 4px 0 1px rgba(51,255,51,.5), 10px 0 2px rgba(51,255,51,.3),
+                     17px 0 4px rgba(51,255,51,.12), 0 0 12px #33ff33; }
+  68% { transform: translateX(2px); text-shadow: 2px 0 1px rgba(51,255,51,.5), 6px 0 2px rgba(51,255,51,.25); }
+}
+@keyframes h4x-power-on {
+  0%, 35% { transform: scale(1, .004); filter: brightness(1.8); }
+  65% { transform: scale(1, 1.04); filter: brightness(1.4); }
+}
+/* The scanlines and the static stay, still; the dropouts and the rolling band
+   exist only to move, so they go. */
+@media (prefers-reduced-motion: reduce) {
+  *, :root::before, body::after, h1::after { animation: none !important; transition: none !important; }
+  :root::after, body::before { display: none; }
+}
+</style>
+</head>
+
+<body>
+<header>
+  <h1>Telemetry</h1>
+  <p class="sub" id="sub">camera-streamer</p>
+  <nav><a href="./">&larr; index</a></nav>
+</header>
+<main>
+  <figure class="watch" id="watch">
+    <img id="watch-video" alt="The camera's picture of the machine" hidden>
+    <p class="watch-empty" id="watch-empty" hidden></p>
+    <div class="watch-overlay" id="watch-overlay" hidden>
+      <p class="watch-state"><b id="watch-state">Connecting…</b><span id="watch-feed"></span></p>
+      <dl class="watch-pos">
+        <div><dt>X</dt><dd id="watch-x">–</dd></div>
+        <div><dt>Y</dt><dd id="watch-y">–</dd></div>
+        <div><dt>Z</dt><dd id="watch-z">–</dd></div>
+      </dl>
+      <p class="watch-frame" id="watch-frame"></p>
+      <div class="watch-job" id="watch-job" hidden>
+        <p class="watch-file" id="watch-file"></p>
+        <p class="watch-bar" id="watch-bar"></p>
+      </div>
+    </div>
+    <button type="button" class="watch-full" id="watch-full" hidden>Full screen</button>
+  </figure>
+  <p class="note" id="watch-note"></p>
+
+  <!-- Started with -fluidnc-url, the page needs nothing typed here; this is
+       for a camera started without one, and for trying a machine out. -->
+  <form class="watch-where" method="get" action="telemetry">
+    <label><span>FluidNC</span>
+      <input type="text" name="fluidnc" id="fluidnc" placeholder="fluidnc.local"
+             autocapitalize="off" spellcheck="false"></label>
+    <button type="submit" class="primary">Watch</button>
+  </form>
+</main>
+<footer>
+  <span>camera-streamer</span> <b id="version"></b>
+  <a href="control">/control</a> <a href="status">/status</a>
+</footer>
+
+<script>
+/* The camera's picture with a FluidNC controller's state over it: the state
+ * (Running, Paused, Alarm …), the feed, X, Y and Z, the file and how far
+ * through it the card has read.
+ *
+ * The state comes from the controller itself, over its websocket, and nothing
+ * has to be asked for while it works: FluidNC gives every websocket an
+ * automatic status report every 200 ms while anything moves —
+ * `<Run|MPos:89.032,122.430,44.991|FS:494,0|SD:65.13,/sd/a.gcode>` — and the
+ * page only reads them. Asking would not work anyway: while the machine
+ * moves, every /command answers `503 Try again when not moving`.
+ *
+ * Standing still, the reports stop. So the page sends `?` — the realtime
+ * status request, answered in any state and changing nothing — on connecting
+ * and whenever it has heard nothing for a while. The answer is also how a
+ * connection that has quietly died is told from a machine with nothing to say.
+ *
+ * FluidNC keeps four websockets and drops the oldest for a fifth, so this one
+ * is a guest: it reconnects slower each time it is dropped, rather than
+ * knocking another page off in a loop, and it lets go while its tab is hidden.
+ *
+ * The controller is -fluidnc-url, as /status reports it, or ?fluidnc= in the
+ * address, which wins. */
+const ASK_MS = 4000;                       // quiet this long, and it asks
+const DEAD_MS = 12000;                     // quiet this long, and it reconnects
+const RETRY_MS = [2000, 5000, 10000, 30000];
+const CAMERA_RETRY_MS = 10000;
+const CAMERA_FIRST_MS = 8000;              // no picture by then, and it is down
+const BAR_CELLS = 24;
+
+const $ = (id) => document.getElementById(id);
+
+function say(node, text, vars) {
+  node.textContent = vars ? text.replace(/\{(\w+)\}/g, (_, k) => vars[k]) : text;
+}
+
+/* "<Run|MPos:1,2,3|FS:494,0|SD:65.13,/sd/a.gcode>" -> {state: "Run", MPos: "1,2,3", …}.
+   Split on the first colon only: "Hold:0" is a state, and SD can carry one. */
+function parseStatus(line) {
+  const [state, ...fields] = line.slice(1, -1).split("|");
+  const out = { state };
+  for (const f of fields) {
+    const at = f.indexOf(":");
+    if (at > 0) out[f.slice(0, at)] = f.slice(at + 1);
+  }
+  return out;
+}
+
+const axesOf = (s) => s.split(",").slice(0, 3).map(Number);
+
+/* "65.13,/sd/a.gcode" while a file runs; "/sd/a.gcode: Sent" for the moment it
+   is opened, before there is a percentage to give. */
+function jobOf(sd) {
+  let m = /^\s*([\d.]+),(.*)$/.exec(sd);
+  if (m) return { pct: Number(m[1]), file: m[2].replace(/^.*\//, "") };
+  m = /^\s*(.*?):\s*Sent\s*$/.exec(sd);
+  return { pct: 0, file: (m ? m[1] : sd).trim().replace(/^.*\//, "") };
+}
+
+/* What FluidNC calls a state, in words. Hold:1 is a pause still slowing down;
+   Hold:0 is one that has stopped. */
+const STATES = {
+  Idle: "Idle", Run: "Running", Jog: "Jogging", Home: "Homing", Alarm: "Alarm",
+  Check: "Checking G-code", Sleep: "Asleep", Hold: "Paused", "Hold:1": "Pausing…",
+  Door: "Door open",
+};
+const BAD = new Set(["Alarm", "Door"]);
+
+/* Two decimals, and never "-0.00": a figure that flickers its sign at rest
+   reads as movement. */
+function mm(v) {
+  const s = v.toFixed(2);
+  return s === "-0.00" ? "0.00" : s;
+}
+
+/* [██████████░░░░░░░░░░░░░░] — a bar as the terminal would draw one. */
+function bar(pct) {
+  const full = Math.round(Math.min(100, Math.max(0, pct)) / 100 * BAR_CELLS);
+  return "[" + "█".repeat(full) + "░".repeat(BAR_CELLS - full) + "]";
+}
+
+/* "fluidnc.local", "http://10.0.0.5/", "10.0.0.5:81" or "ws://10.0.0.5:81"
+   -> where its websocket is, and the subprotocol it answers to. FluidNC's
+   WebUI 3 socket is on the web port at /, as "webui-v3"; older firmware and
+   WebUI 2 have it on port 81, as "arduino". Asking for the wrong one fails
+   the handshake. */
+function socketOf(given) {
+  let url;
+  try {
+    const s = given.trim().replace(/^https?:\/\//, "");
+    // A name, an address and a port; URL() would take "foo bar" as foo%20bar.
+    if (!/^(wss?:\/\/)?[\w.\-\[\]:]+\/?$/.test(s)) return null;
+    url = new URL(/^wss?:\/\//.test(s) ? s : "ws://" + s);
+  } catch (e) {
+    return null;
+  }
+  return { url: url.href, host: url.host, protocol: url.port === "81" ? "arduino" : "webui-v3" };
+}
+
+(async function watch() {
+  const fig = $("watch");
+  const img = $("watch-video");
+  const empty = $("watch-empty");
+  const overlay = $("watch-overlay");
+  const note = $("watch-note");
+  const stateLine = fig.querySelector(".watch-state");
+  const show = {
+    state: $("watch-state"), feed: $("watch-feed"), frame: $("watch-frame"),
+    x: $("watch-x"), y: $("watch-y"), z: $("watch-z"),
+    job: $("watch-job"), file: $("watch-file"), bar: $("watch-bar"),
+  };
+
+  // What this camera-streamer was started with. A page opened from somewhere
+  // that is not one (a saved copy) still tries the stream beside it.
+  let status = {};
+  try {
+    const res = await fetch("status", { cache: "no-store" });
+    if (res.ok) status = await res.json();
+  } catch (e) { /* not served by camera-streamer; carry on with the query */ }
+  if (status.version) say($("version"), status.version);
+
+  const given = new URLSearchParams(location.search).get("fluidnc")
+    || (status.fluidnc && status.fluidnc.url) || "";
+  $("fluidnc").value = given;
+  const machine = given.trim() ? socketOf(given) : null;
+  const streamOn = !(status.outputs && status.outputs.stream && status.outputs.stream.enabled === false);
+
+  const sub = $("sub");
+  sub.textContent = "camera-streamer";
+  if (machine) {
+    sub.append(" · FluidNC ");
+    const b = document.createElement("b");
+    b.textContent = machine.host;
+    sub.append(b);
+  }
+
+  if (given.trim() && !machine) {
+    say(note, "\"{given}\" is not an address. Give the controller's name or address, e.g. fluidnc.local or 192.168.1.20.", { given });
+    note.className = "note error";
+  }
+  // An https page may not open a ws:// socket; the browser blocks it as mixed
+  // content, and says nothing on the page about why. FluidNC has no wss://.
+  if (machine && location.protocol === "https:" && machine.url.startsWith("ws:")) {
+    say(note, "This page is on https and the controller is on plain ws://, so the browser "
+      + "will block it. Open camera-streamer over http.");
+    note.className = "note error";
+  }
+
+  const full = $("watch-full");
+  if (fig.requestFullscreen) {
+    full.hidden = false;
+    full.addEventListener("click", () => fig.requestFullscreen().catch(() => {}));
+  }
+
+  /* ---- the camera ---- */
+  /* /stream is MJPEG, which an <img> shows in every browser. /webrtc is lower
+     latency, but an iframe cannot have the overlay laid over it and still go
+     full screen with it. */
+  let cameraRetry = null;
+  function fitTo(w, h) {
+    if (w > 0 && h > 0) fig.style.setProperty("--aspect", w / h);
+  }
+  const stream = status.outputs && status.outputs.stream;
+  if (stream) fitTo(stream.width, stream.height);
+  function cameraAlone(alone, text, vars) {
+    img.hidden = alone;
+    empty.hidden = !alone;
+    overlay.classList.toggle("alone", alone);
+    if (alone) say(empty, text, vars);
+  }
+  function startCamera() {
+    clearTimeout(cameraRetry);
+    if (!streamOn) {
+      cameraAlone(true, "This camera-streamer has its MJPEG stream turned off "
+        + "(-camera-stream.disabled), so there is no picture to show.");
+      return;
+    }
+    // The picture's own shape, from the first frame, which is the stream's
+    // whatever /status said about it.
+    img.onload = () => fitTo(img.naturalWidth, img.naturalHeight);
+    const failed = () => {
+      clearTimeout(cameraRetry);
+      img.onerror = null;
+      img.removeAttribute("src");
+      cameraAlone(true, "No picture from the camera. Trying again every {seconds} seconds.",
+        { seconds: CAMERA_RETRY_MS / 1000 });
+      cameraRetry = setTimeout(startCamera, CAMERA_RETRY_MS);
+    };
+    img.onerror = failed;
+    // A fresh URL each time, or a retry is answered from the failure.
+    img.src = `stream?t=${Date.now()}`;
+    cameraAlone(false);
+    // A camera that has stopped delivering frames leaves the stream open and
+    // empty. A stream that has sent no picture by now is taken as not there.
+    cameraRetry = setTimeout(() => {
+      if (!img.naturalWidth) failed();
+      else fitTo(img.naturalWidth, img.naturalHeight);
+    }, CAMERA_FIRST_MS);
+  }
+  function stopCamera() {
+    clearTimeout(cameraRetry);
+    img.onerror = null;
+    // Emptying src is what closes the stream; a hidden <img> keeps pulling it.
+    img.removeAttribute("src");
+  }
+
+  /* ---- the machine ---- */
+  let ws = null;
+  let heardAt = 0;
+  let askedAt = 0;
+  let retries = 0;
+  let reconnect = null;
+  let wco = null;       // the work offset comes every few reports, not in each
+  let job = null;       // the last file seen running, kept after it ends
+
+  function sayState(text, bad) {
+    say(show.state, text);
+    stateLine.classList.toggle("bad", !!bad);
+  }
+
+  function heard(line) {
+    if (!/^<.*>$/.test(line)) return;
+    const s = parseStatus(line);
+    const kind = s.state.split(":")[0];
+    sayState(STATES[s.state] || STATES[kind] || s.state, BAD.has(kind));
+    const feed = s.FS ? Number(s.FS.split(",")[0]) : s.F ? Number(s.F) : 0;
+    if (feed > 0) say(show.feed, "{feed} mm/min", { feed: Math.round(feed) });
+    else say(show.feed, "");
+
+    // Work coordinates, which are the figures in the G-code: what the machine
+    // reports is its own position, and the offset between comes now and then.
+    if (s.WCO) wco = axesOf(s.WCO);
+    let pos = null;
+    if (s.WPos) {
+      pos = axesOf(s.WPos);
+      say(show.frame, "work coordinates, as in the G-code");
+    } else if (s.MPos && wco) {
+      pos = axesOf(s.MPos).map((v, i) => v - (wco[i] || 0));
+      say(show.frame, "work coordinates, as in the G-code");
+    } else if (s.MPos) {
+      pos = axesOf(s.MPos);
+      say(show.frame, "machine coordinates, until the work offset is heard");
+    }
+    if (pos) {
+      show.x.textContent = mm(pos[0]);
+      show.y.textContent = mm(pos[1]);
+      show.z.textContent = pos.length > 2 ? mm(pos[2]) : "–";
+    }
+
+    if (s.SD !== undefined) {
+      job = { ...jobOf(s.SD), running: true };
+      say(show.file, job.file);
+      say(show.bar, "{bar} {pct}%", { bar: bar(job.pct), pct: job.pct.toFixed(1) });
+      show.job.hidden = false;
+    } else if (job && job.running) {
+      // The report stops naming the file the moment it is closed, at the end
+      // or at a reset; how far it had got says which. SD is the share *read*,
+      // which runs ahead of the tool by what the planner holds, so the last
+      // few moves may still be under way, and the state above says so.
+      job.running = false;
+      if (job.pct >= 99) {
+        say(show.file, "{file} · all sent", { file: job.file });
+        say(show.bar, "{bar} 100%", { bar: bar(100) });
+      } else {
+        say(show.file, "{file} · stopped at {pct}%", { file: job.file, pct: job.pct.toFixed(1) });
+      }
+    } else if (!job) {
+      show.job.hidden = true;
+    }
+  }
+
+  function ask() {
+    askedAt = Date.now();
+    try { ws.send("?"); } catch (e) { /* closing; the watchdog will see it */ }
+  }
+
+  function connect() {
+    clearTimeout(reconnect);
+    let sock;
+    try {
+      sock = new WebSocket(machine.url, machine.protocol);
+    } catch (e) {
+      dropped();
+      return;
+    }
+    ws = sock;
+    // Binary, because that is how FluidNC sends its console now: coalesced,
+    // so one frame can carry several lines and a line can be cut between two.
+    // Its own bookkeeping (currentID:, PING:) comes as text, and so did the
+    // console on older firmware, so text is read as whole lines.
+    sock.binaryType = "arraybuffer";
+    const decoder = new TextDecoder();
+    let partial = "";
+    sock.onopen = () => {
+      heardAt = Date.now();
+      say(note, "Watching {machine}.", { machine: machine.host });
+      note.className = "note";
+      ask();
+    };
+    sock.onmessage = (ev) => {
+      heardAt = Date.now();
+      retries = 0;
+      if (typeof ev.data === "string") {
+        ev.data.split("\n").forEach((l) => heard(l.trim()));
+        return;
+      }
+      partial += decoder.decode(ev.data, { stream: true });
+      const lines = partial.split("\n");
+      partial = lines.pop();
+      lines.forEach((l) => heard(l.trim()));
+    };
+    sock.onclose = () => { if (ws === sock) dropped(); };
+  }
+
+  function letGo() {
+    clearTimeout(reconnect);
+    const sock = ws;
+    ws = null;
+    if (sock) {
+      sock.onclose = null;
+      try { sock.close(); } catch (e) { /* already gone */ }
+    }
+  }
+
+  function dropped() {
+    letGo();
+    sayState("Not connected", true);
+    const wait = RETRY_MS[Math.min(retries, RETRY_MS.length - 1)];
+    retries += 1;
+    say(note, "{machine} is not answering. Trying again in {seconds} seconds.",
+        { machine: machine.host, seconds: wait / 1000 });
+    reconnect = setTimeout(connect, wait);
+  }
+
+  function startMachine() {
+    if (!machine) {
+      overlay.hidden = true;
+      if (!given.trim()) {
+        say(note, "No FluidNC controller is set, so this is the camera alone. Give its "
+          + "address below, or start camera-streamer with -fluidnc-url=.");
+      }
+      return;
+    }
+    overlay.hidden = false;
+    connect();
+  }
+
+  // A socket that is open but silent is as gone as a closed one, and a dead
+  // network may take minutes to say so; this notices sooner.
+  setInterval(() => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const quiet = Date.now() - heardAt;
+    if (quiet > DEAD_MS) dropped();
+    else if (quiet > ASK_MS && Date.now() - askedAt > ASK_MS) ask();
+  }, 1000);
+
+  // A tab nobody is looking at gives its socket back to the machine and stops
+  // pulling a stream off the camera, which is a megabyte or so a second.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      letGo();
+      stopCamera();
+    } else {
+      retries = 0;
+      startCamera();
+      startMachine();
+    }
+  });
+
+  startCamera();
+  startMachine();
+})();
+</script>
+</body>
+</html>

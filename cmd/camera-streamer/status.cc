@@ -9,12 +9,14 @@ extern "C" {
 #include "output/rtsp/rtsp.h"
 #include "output/webrtc/webrtc.h"
 #include "output/output.h"
+#include "cmd/camera-streamer/fluidnc.h"
 #include "version.h"
 
 extern camera_t *camera;
 extern http_server_options_t http_options;
 extern rtsp_options_t rtsp_options;
 extern webrtc_options_t webrtc_options;
+extern fluidnc_options_t fluidnc_options;
 
 };
 
@@ -191,6 +193,8 @@ extern "C" void camera_status_json(http_worker_t *worker, FILE *stream)
     message["endpoints"]["rtsp"]["frames"] = rtsp_options.frames;
     message["endpoints"]["rtsp"]["dropped"] = rtsp_options.dropped;
   }
+
+  message["fluidnc"]["url"] = fluidnc_options.url;
 
   http_write_response(stream, "200 OK", "application/json", message.dump().c_str(), 0);
 }
