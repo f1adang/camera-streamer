@@ -227,8 +227,9 @@ button:hover { border-color: var(--ink-dim); }
 
 .note { margin: 12px 0 0; min-height: 1.5em; font-size: 14px; color: var(--on-ground); opacity: .85; }
 
-/* The server the picture comes from: under it, as wide as it, a panel of
-   figures rather than a box over the picture. */
+/* The server the picture comes from: under it, as wide as it (the same
+   rule, from the same --aspect), a panel of figures rather than a box over
+   the picture. */
 .server {
   max-width: max(320px, calc((100vh - 170px) * var(--aspect, 1.7778)));
   margin: 18px auto 0; padding: 14px 16px;
@@ -957,8 +958,9 @@ const CLOCKS = {
      latency, but an iframe cannot have the box laid over it and still go
      full screen with it. */
   let cameraRetry = null;
+  // On <main>, not the picture, so the server panel under it is as wide.
   function fitTo(w, h) {
-    if (w > 0 && h > 0) fig.style.setProperty("--aspect", w / h);
+    if (w > 0 && h > 0) document.querySelector("main").style.setProperty("--aspect", w / h);
   }
   const stream = status.outputs && status.outputs.stream;
   if (stream) fitTo(stream.width, stream.height);
