@@ -66,7 +66,8 @@ webrtc_options_t webrtc_options = {
 };
 
 fluidnc_options_t fluidnc_options = {
-  .url = ""
+  .url = "",
+  .name = ""
 };
 
 option_value_t camera_formats[] = {
@@ -143,6 +144,7 @@ option_t all_options[] = {
   DEFINE_OPTION_DEFAULT(webrtc, timeout_s, ulong, "3600", "Set how long to keep a WebRTC stream alive before disconnecting by default."),
 
   DEFINE_OPTION_PTR(fluidnc, url, string, "Connect to this FluidNC controller and show its telemetry over the stream on `/telemetry`. Ex.: `-fluidnc-url=fluidnc.local`"),
+  DEFINE_OPTION_PTR(fluidnc, name, string, "Name the FluidNC controller on `/telemetry`. Defaults to its host name."),
 
   DEFINE_OPTION_DEFAULT(log, debug, bool, "1", "Enable debug logging."),
   DEFINE_OPTION_DEFAULT(log, verbose, bool, "1", "Enable verbose logging."),
