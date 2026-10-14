@@ -2,6 +2,7 @@
 #include "output/webrtc/webrtc.h"
 #include "device/camera/camera.h"
 #include "output/output.h"
+#include "cmd/camera-streamer/fluidnc.h"
 
 extern unsigned char html_index_html[];
 extern unsigned int html_index_html_len;
@@ -94,6 +95,7 @@ http_method_t http_methods[] = {
   { "GET",  "/webrtc", http_content, "text/html", html_webrtc_html, 0, &html_webrtc_html_len },
   { "POST", "/webrtc", http_webrtc_offer },
   { "GET",  "/control", http_content, "text/html", html_control_html, 0, &html_control_html_len },
+  { "GET",  "/fluidnc", http_fluidnc_events },
   { "GET",  "/telemetry", http_content, "text/html", html_telemetry_html, 0, &html_telemetry_html_len },
   { "GET",  "/option", camera_post_option },
   { "POST", "/option", camera_post_option },

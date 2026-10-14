@@ -62,7 +62,8 @@
 			<br>
 			<ul>
 				<li>The MJPEG stream with a FluidNC controller's state, position and running job laid over it.</li>
-				<li>Watches the controller given by <i>-fluidnc-url=</i>, or <a href="telemetry?fluidnc=fluidnc.local">/telemetry?fluidnc=fluidnc.local</a> for this page.</li>
+				<li>Watches the controller given by <i>-fluidnc-url=</i>. camera-streamer connects to it, so only camera-streamer has to reach it.</li>
+				<li><a href="fluidnc"><b>/fluidnc</b></a> relays its status reports as server-sent events.</li>
 			</ul>
 		</li>
 		<br>
