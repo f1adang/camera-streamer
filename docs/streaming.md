@@ -29,15 +29,30 @@ controller's state laid over it: Idle, Running, Paused, Alarm and the rest, the 
 X, Y and Z in work coordinates, and the file being run with how far through it the
 controller has read. Give the controller with:
 
-- adding `--fluidnc-url=fluidnc.local` (or an address, `http://192.168.1.20`): every viewer of `/telemetry` watches it; it is also reported by `/status` as `fluidnc.url`
-- opening `/telemetry?fluidnc=192.168.1.20`: watches that controller from this page, whatever was given at start-up
+- `--fluidnc-url=fluidnc.local` (or an address and port, `http://192.168.1.20`, `192.168.1.20:81`)
 
-The browser talks to the controller, not camera-streamer, so both have to be reachable from it.
-It reads the status reports FluidNC sends every websocket while the machine moves, and asks
-with `?` only when the machine has gone quiet. The WebUI 3 socket (`ws://<host>/`) is used,
-or WebUI 2's (`ws://<host>:81/`) when the URL names port 81. FluidNC keeps four websockets
-and drops the oldest for a fifth, so the page reconnects after 2, 5, 10 and then every 30
-seconds, and lets go of the socket and the stream while its tab is hidden.
+camera-streamer connects to the controller, not the browser, so the page works from
+wherever `/stream` does, through a proxy included; only camera-streamer has to reach
+the controller. It relays the status reports as server-sent events on
+`http://<ip>:8080/fluidnc`:
+
+    data: {"connected":true,"age":120,"status":"<Run|MPos:89.032,122.430,44.991|FS:494,0|SD:65.13,/sd/a.gcode>","wco":"-3.000,-14.000,46.000","error":""}
+
+`status` is the latest report as the controller sent it, and `wco` the work offset from the
+last report that carried one, since FluidNC sends it only every few reports. An event comes
+with every report, and at least once a second. Behind nginx, `X-Accel-Buffering: no` is sent
+so the events are not held back; other proxies need response buffering off for `/fluidnc`.
+
+One websocket to the controller is shared by every viewer, and held only while somebody
+watches: FluidNC keeps four websockets and drops the oldest for a fifth. It is closed ten
+seconds after the last viewer leaves. While the machine moves, FluidNC sends a report every
+200 ms by itself; standing still, camera-streamer asks with `?` after four quiet seconds, and
+reconnects after twelve with no answer, or after 2, 5, 10 and then every 30 seconds when the
+controller cannot be reached. The WebUI 3 socket (`ws://<host>/`) is used, or WebUI 2's
+(`ws://<host>:81/`) when the URL names port 81.
+
+Each viewer of `/telemetry` holds two HTTP connections, `/stream` and `/fluidnc`, out of
+`--http-maxcons` (10 by default).
 
 ## RTSP server
 

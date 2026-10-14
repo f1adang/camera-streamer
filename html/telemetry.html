@@ -181,20 +181,6 @@ button.primary:hover { background: var(--hot); border-color: var(--hot); }
   background: var(--hot); color: var(--on-green); text-shadow: 0 0 6px rgba(102,255,102,.6);
 }
 
-.watch-where { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 18px; }
-.watch-where label { display: flex; flex-direction: column; gap: 4px; flex: 0 1 340px; min-width: 0; }
-.watch-where label span { font: 12px var(--pixel); letter-spacing: .05em; color: var(--phosphor); }
-.watch-where input {
-  width: 100%; padding: 3px 8px;
-  background: var(--sheet); color: var(--ink); border: 1px solid var(--line);
-  text-shadow: inherit;
-}
-.watch-where input:focus {
-  outline: 1px solid var(--phosphor);
-  box-shadow: 0 0 0 .1rem var(--line-soft), 0 0 10px rgba(51,255,51,.4);
-}
-.watch-where input::placeholder { color: var(--ink-dim); }
-
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: var(--sunk); }
 ::-webkit-scrollbar-thumb { background: var(--phosphor); box-shadow: 0 0 6px rgba(51,255,51,.6); }
@@ -383,15 +369,6 @@ body > header, body > main, body > footer {
     <button type="button" class="watch-full" id="watch-full" hidden>Full screen</button>
   </figure>
   <p class="note" id="watch-note"></p>
-
-  <!-- Started with -fluidnc-url, the page needs nothing typed here; this is
-       for a camera started without one, and for trying a machine out. -->
-  <form class="watch-where" method="get" action="telemetry">
-    <label><span>FluidNC</span>
-      <input type="text" name="fluidnc" id="fluidnc" placeholder="fluidnc.local"
-             autocapitalize="off" spellcheck="false"></label>
-    <button type="submit" class="primary">Watch</button>
-  </form>
 </main>
 <footer>
   <span>camera-streamer</span> <b id="version"></b>
@@ -403,27 +380,14 @@ body > header, body > main, body > footer {
  * (Running, Paused, Alarm …), the feed, X, Y and Z, the file and how far
  * through it the card has read.
  *
- * The state comes from the controller itself, over its websocket, and nothing
- * has to be asked for while it works: FluidNC gives every websocket an
- * automatic status report every 200 ms while anything moves —
- * `<Run|MPos:89.032,122.430,44.991|FS:494,0|SD:65.13,/sd/a.gcode>` — and the
- * page only reads them. Asking would not work anyway: while the machine
- * moves, every /command answers `503 Try again when not moving`.
- *
- * Standing still, the reports stop. So the page sends `?` — the realtime
- * status request, answered in any state and changing nothing — on connecting
- * and whenever it has heard nothing for a while. The answer is also how a
- * connection that has quietly died is told from a machine with nothing to say.
- *
- * FluidNC keeps four websockets and drops the oldest for a fifth, so this one
- * is a guest: it reconnects slower each time it is dropped, rather than
- * knocking another page off in a loop, and it lets go while its tab is hidden.
- *
- * The controller is -fluidnc-url, as /status reports it, or ?fluidnc= in the
- * address, which wins. */
-const ASK_MS = 4000;                       // quiet this long, and it asks
-const DEAD_MS = 12000;                     // quiet this long, and it reconnects
-const RETRY_MS = [2000, 5000, 10000, 30000];
+ * The controller is -fluidnc-url, and camera-streamer talks to it, not this
+ * page: the browser may be outside, through a proxy, where the controller
+ * cannot be reached. /fluidnc relays its status reports as server-sent
+ * events, one long-lived response as /stream is, with the latest report and
+ * the work offset, which the controller sends only every few reports. An
+ * event comes at least every second, so silence means camera-streamer has
+ * gone, and the browser's EventSource reconnects by itself. */
+const QUIET_MS = 5000;                     // no event this long, and it says so
 const CAMERA_RETRY_MS = 10000;
 const CAMERA_FIRST_MS = 8000;              // no picture by then, and it is down
 const BAR_CELLS = 24;
@@ -479,23 +443,8 @@ function bar(pct) {
   return "[" + "█".repeat(full) + "░".repeat(BAR_CELLS - full) + "]";
 }
 
-/* "fluidnc.local", "http://10.0.0.5/", "10.0.0.5:81" or "ws://10.0.0.5:81"
-   -> where its websocket is, and the subprotocol it answers to. FluidNC's
-   WebUI 3 socket is on the web port at /, as "webui-v3"; older firmware and
-   WebUI 2 have it on port 81, as "arduino". Asking for the wrong one fails
-   the handshake. */
-function socketOf(given) {
-  let url;
-  try {
-    const s = given.trim().replace(/^https?:\/\//, "");
-    // A name, an address and a port; URL() would take "foo bar" as foo%20bar.
-    if (!/^(wss?:\/\/)?[\w.\-\[\]:]+\/?$/.test(s)) return null;
-    url = new URL(/^wss?:\/\//.test(s) ? s : "ws://" + s);
-  } catch (e) {
-    return null;
-  }
-  return { url: url.href, host: url.host, protocol: url.port === "81" ? "arduino" : "webui-v3" };
-}
+/* "http://fluidnc.local:80/" -> "fluidnc.local", for the header. */
+const hostOf = (url) => url.replace(/^[a-z]+:\/\//, "").replace(/\/.*$/, "");
 
 (async function watch() {
   const fig = $("watch");
@@ -510,40 +459,23 @@ function socketOf(given) {
     job: $("watch-job"), file: $("watch-file"), bar: $("watch-bar"),
   };
 
-  // What this camera-streamer was started with. A page opened from somewhere
-  // that is not one (a saved copy) still tries the stream beside it.
+  // What this camera-streamer was started with.
   let status = {};
   try {
     const res = await fetch("status", { cache: "no-store" });
     if (res.ok) status = await res.json();
-  } catch (e) { /* not served by camera-streamer; carry on with the query */ }
+  } catch (e) { /* the stream may still be there; the events will say */ }
   if (status.version) say($("version"), status.version);
 
-  const given = new URLSearchParams(location.search).get("fluidnc")
-    || (status.fluidnc && status.fluidnc.url) || "";
-  $("fluidnc").value = given;
-  const machine = given.trim() ? socketOf(given) : null;
+  const machine = status.fluidnc && status.fluidnc.url ? hostOf(status.fluidnc.url) : "";
   const streamOn = !(status.outputs && status.outputs.stream && status.outputs.stream.enabled === false);
 
-  const sub = $("sub");
-  sub.textContent = "camera-streamer";
   if (machine) {
+    const sub = $("sub");
     sub.append(" · FluidNC ");
     const b = document.createElement("b");
-    b.textContent = machine.host;
+    b.textContent = machine;
     sub.append(b);
-  }
-
-  if (given.trim() && !machine) {
-    say(note, "\"{given}\" is not an address. Give the controller's name or address, e.g. fluidnc.local or 192.168.1.20.", { given });
-    note.className = "note error";
-  }
-  // An https page may not open a ws:// socket; the browser blocks it as mixed
-  // content, and says nothing on the page about why. FluidNC has no wss://.
-  if (machine && location.protocol === "https:" && machine.url.startsWith("ws:")) {
-    say(note, "This page is on https and the controller is on plain ws://, so the browser "
-      + "will block it. Open camera-streamer over http.");
-    note.className = "note error";
   }
 
   const full = $("watch-full");
@@ -605,12 +537,8 @@ function socketOf(given) {
   }
 
   /* ---- the machine ---- */
-  let ws = null;
-  let heardAt = 0;
-  let askedAt = 0;
-  let retries = 0;
-  let reconnect = null;
-  let wco = null;       // the work offset comes every few reports, not in each
+  let events = null;
+  let eventAt = 0;
   let job = null;       // the last file seen running, kept after it ends
 
   function sayState(text, bad) {
@@ -618,7 +546,7 @@ function socketOf(given) {
     stateLine.classList.toggle("bad", !!bad);
   }
 
-  function heard(line) {
+  function heard(line, wcoText) {
     if (!/^<.*>$/.test(line)) return;
     const s = parseStatus(line);
     const kind = s.state.split(":")[0];
@@ -628,8 +556,9 @@ function socketOf(given) {
     else say(show.feed, "");
 
     // Work coordinates, which are the figures in the G-code: what the machine
-    // reports is its own position, and the offset between comes now and then.
-    if (s.WCO) wco = axesOf(s.WCO);
+    // reports is its own position, and the offset between comes now and then,
+    // kept by camera-streamer from the last report that had it.
+    const wco = wcoText ? axesOf(wcoText) : null;
     let pos = null;
     if (s.WPos) {
       pos = axesOf(s.WPos);
@@ -669,99 +598,57 @@ function socketOf(given) {
     }
   }
 
-  function ask() {
-    askedAt = Date.now();
-    try { ws.send("?"); } catch (e) { /* closing; the watchdog will see it */ }
-  }
-
-  function connect() {
-    clearTimeout(reconnect);
-    let sock;
-    try {
-      sock = new WebSocket(machine.url, machine.protocol);
-    } catch (e) {
-      dropped();
-      return;
+  function onEvent(ev) {
+    eventAt = Date.now();
+    let d;
+    try { d = JSON.parse(ev.data); } catch (e) { return; }
+    if (d.connected) {
+      say(note, "Watching {machine}.", { machine });
+      if (d.status) heard(d.status, d.wco);
+    } else if (d.error) {
+      sayState("Not connected", true);
+      say(note, "{error}. camera-streamer keeps trying.", { error: d.error });
+    } else {
+      sayState("Connecting…");
+      say(note, "camera-streamer is connecting to {machine}.", { machine });
     }
-    ws = sock;
-    // Binary, because that is how FluidNC sends its console now: coalesced,
-    // so one frame can carry several lines and a line can be cut between two.
-    // Its own bookkeeping (currentID:, PING:) comes as text, and so did the
-    // console on older firmware, so text is read as whole lines.
-    sock.binaryType = "arraybuffer";
-    const decoder = new TextDecoder();
-    let partial = "";
-    sock.onopen = () => {
-      heardAt = Date.now();
-      say(note, "Watching {machine}.", { machine: machine.host });
-      note.className = "note";
-      ask();
-    };
-    sock.onmessage = (ev) => {
-      heardAt = Date.now();
-      retries = 0;
-      if (typeof ev.data === "string") {
-        ev.data.split("\n").forEach((l) => heard(l.trim()));
-        return;
-      }
-      partial += decoder.decode(ev.data, { stream: true });
-      const lines = partial.split("\n");
-      partial = lines.pop();
-      lines.forEach((l) => heard(l.trim()));
-    };
-    sock.onclose = () => { if (ws === sock) dropped(); };
-  }
-
-  function letGo() {
-    clearTimeout(reconnect);
-    const sock = ws;
-    ws = null;
-    if (sock) {
-      sock.onclose = null;
-      try { sock.close(); } catch (e) { /* already gone */ }
-    }
-  }
-
-  function dropped() {
-    letGo();
-    sayState("Not connected", true);
-    const wait = RETRY_MS[Math.min(retries, RETRY_MS.length - 1)];
-    retries += 1;
-    say(note, "{machine} is not answering. Trying again in {seconds} seconds.",
-        { machine: machine.host, seconds: wait / 1000 });
-    reconnect = setTimeout(connect, wait);
   }
 
   function startMachine() {
     if (!machine) {
       overlay.hidden = true;
-      if (!given.trim()) {
-        say(note, "No FluidNC controller is set, so this is the camera alone. Give its "
-          + "address below, or start camera-streamer with -fluidnc-url=.");
-      }
+      say(note, "No FluidNC controller is set, so this is the camera alone. "
+        + "Start camera-streamer with -fluidnc-url= to see one here.");
       return;
     }
     overlay.hidden = false;
-    connect();
+    eventAt = Date.now();
+    events = new EventSource("fluidnc");
+    events.onmessage = onEvent;
   }
 
-  // A socket that is open but silent is as gone as a closed one, and a dead
-  // network may take minutes to say so; this notices sooner.
+  function stopMachine() {
+    if (events) events.close();
+    events = null;
+  }
+
+  // Every second there is an event, changed or not; none for a while, and
+  // camera-streamer itself is not answering. EventSource tries again.
   setInterval(() => {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    const quiet = Date.now() - heardAt;
-    if (quiet > DEAD_MS) dropped();
-    else if (quiet > ASK_MS && Date.now() - askedAt > ASK_MS) ask();
+    if (events && Date.now() - eventAt > QUIET_MS) {
+      sayState("Not connected", true);
+      say(note, "camera-streamer is not answering. Trying again.");
+    }
   }, 1000);
 
-  // A tab nobody is looking at gives its socket back to the machine and stops
-  // pulling a stream off the camera, which is a megabyte or so a second.
+  // A tab nobody is looking at stops pulling a stream off the camera, which
+  // is a megabyte or so a second, and stops watching, so camera-streamer can
+  // give the controller its socket back.
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
-      letGo();
+      stopMachine();
       stopCamera();
     } else {
-      retries = 0;
       startCamera();
       startMachine();
     }
