@@ -783,7 +783,6 @@ const DE = {
   "Sending": "Senderate",
   "Stream": "Datenstrom",
   "Uptime": "Laufzeit",
-  "OK": "In Ordnung",
   "Under-voltage!": "Unterspannung!",
   "Under-voltage since boot": "Unterspannung seit dem Start",
   "None": "Keine",
@@ -1107,7 +1106,7 @@ const CLOCKS = {
     if (known(f)) {
       if (f & 0x1) serverRow("power", f, "Under-voltage!", null, "bad");
       else if (f & 0x10000) serverRow("power", f, "Under-voltage since boot", null, "warn");
-      else serverRow("power", f, "OK");
+      else serverRow("power", null);    // said only when something is wrong
       if (f & 0x4) serverRow("throttle", f, "Throttled", null, "bad");
       else if (f & 0x2) serverRow("throttle", f, "Clock capped", null, "bad");
       else if (f & 0x8) serverRow("throttle", f, "Soft temperature limit", null, "warn");
@@ -1116,7 +1115,7 @@ const CLOCKS = {
     } else {
       // Only the alarm: under-voltage now, and nothing about throttling.
       const u = v.undervoltage;
-      if (known(u)) serverRow("power", u, u ? "Under-voltage!" : "OK", null, u ? "bad" : "");
+      if (u) serverRow("power", u, "Under-voltage!", null, "bad");
       else serverRow("power", null);
       serverRow("throttle", null);
     }
