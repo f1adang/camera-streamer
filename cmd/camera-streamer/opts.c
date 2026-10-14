@@ -6,6 +6,7 @@
 #include "output/rtsp/rtsp.h"
 #include "output/webrtc/webrtc.h"
 #include "output/output.h"
+#include "cmd/camera-streamer/fluidnc.h"
 
 camera_options_t camera_options = {
   .path = "",
@@ -62,6 +63,10 @@ rtsp_options_t rtsp_options = {
 };
 
 webrtc_options_t webrtc_options = {
+};
+
+fluidnc_options_t fluidnc_options = {
+  .url = ""
 };
 
 option_value_t camera_formats[] = {
@@ -136,6 +141,8 @@ option_t all_options[] = {
   DEFINE_OPTION_PTR(webrtc, ice_servers, list, "Specify ICE servers: [(stun|turn|turns)(:|://)][username:password@]hostname[:port][?transport=udp|tcp|tls)]."),
   DEFINE_OPTION_DEFAULT(webrtc, disable_client_ice, bool, "1", "Ignore ICE servers provided in '/webrtc' request."),
   DEFINE_OPTION_DEFAULT(webrtc, timeout_s, ulong, "3600", "Set how long to keep a WebRTC stream alive before disconnecting by default."),
+
+  DEFINE_OPTION_PTR(fluidnc, url, string, "Show the telemetry of this FluidNC controller over the stream on `/telemetry`. Ex.: `-fluidnc-url=http://fluidnc.local`"),
 
   DEFINE_OPTION_DEFAULT(log, debug, bool, "1", "Enable debug logging."),
   DEFINE_OPTION_DEFAULT(log, verbose, bool, "1", "Enable verbose logging."),
