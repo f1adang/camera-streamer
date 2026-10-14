@@ -13,7 +13,8 @@
 //
 // Viewers get the latest report as server-sent events on /fluidnc: one
 // long-lived response, as /stream is, which passes a proxy that passes the
-// stream, rather than a request per report.
+// stream, rather than a request per report. Each event also counts the
+// viewers, the /fluidnc responses open, with or without a controller.
 
 #include "cmd/camera-streamer/fluidnc.h"
 #include "util/http/http.h"
@@ -570,11 +571,6 @@ static void json_string(FILE *stream, const char *s)
 
 void http_fluidnc_events(http_worker_t *worker, FILE *stream)
 {
-  if (!fluidnc_options.url[0]) {
-    http_404(stream, "No FluidNC controller: start camera-streamer with --fluidnc-url.\n");
-    return;
-  }
-
   // X-Accel-Buffering keeps nginx from holding the events back until a
   // buffer fills, which at a report of 80 bytes is a minute.
   fprintf(stream,
@@ -589,10 +585,14 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
   if (fflush(stream))
     return;
 
-  pthread_once(&fluidnc_once, fluidnc_start);
+  // Without a controller there is still the count of who is watching.
+  if (fluidnc_options.url[0])
+    pthread_once(&fluidnc_once, fluidnc_start);
 
+  // Everybody watching hears at once that somebody came, or went.
   pthread_mutex_lock(&fluidnc.lock);
   fluidnc.viewers++;
+  fluidnc.seq++;
   pthread_cond_broadcast(&fluidnc.changed);
 
   unsigned seen = fluidnc.seq - 1;
@@ -606,6 +606,7 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
     }
 
     seen = fluidnc.seq;
+    int viewers = fluidnc.viewers;
     bool connected = fluidnc.connected;
     uint64_t age = now_ms() - fluidnc.heard_at;
     char status[FLUIDNC_LINE], wco[128], error[FLUIDNC_ERROR];
@@ -616,8 +617,8 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
 
     // Written without the lock: a viewer whose network is slow holds up
     // nobody but itself.
-    fprintf(stream, "data: {\"connected\":%s,\"age\":%llu,\"status\":",
-      connected ? "true" : "false", connected ? (unsigned long long)age : 0ULL);
+    fprintf(stream, "data: {\"viewers\":%d,\"connected\":%s,\"age\":%llu,\"status\":",
+      viewers, connected ? "true" : "false", connected ? (unsigned long long)age : 0ULL);
     json_string(stream, status);
     fputs(",\"wco\":", stream);
     json_string(stream, wco);
@@ -633,6 +634,7 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
 
   if (--fluidnc.viewers == 0)
     fluidnc.idle_since = now_ms();
+  fluidnc.seq++;
   pthread_cond_broadcast(&fluidnc.changed);
   pthread_mutex_unlock(&fluidnc.lock);
 }

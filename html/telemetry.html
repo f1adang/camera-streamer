@@ -179,7 +179,8 @@ main { width: 100%; max-width: 1400px; margin: 0 auto; padding: 18px 16px 28px; 
 }
 .watch img { display: block; width: 100%; height: auto; }
 .watch:fullscreen { max-width: none; background: #000; border: 0; border-radius: 0; box-shadow: none; }
-.watch:fullscreen img { width: 100%; height: 100%; object-fit: contain; }
+/* The picture takes what the box under it, if it is under it, leaves. */
+.watch:fullscreen img { flex: 1 1 0; min-height: 0; width: 100%; height: 100%; object-fit: contain; }
 .watch-glass { display: none; }
 .watch-empty { margin: 0; padding: 40px 24px; max-width: 56ch; text-align: center; color: var(--ink-dim); }
 
@@ -192,7 +193,11 @@ main { width: 100%; max-width: 1400px; margin: 0 auto; padding: 18px 16px 28px; 
 /* With no picture behind it, it stands in the frame rather than in a corner. */
 .watch-overlay.alone { position: static; margin: 24px; }
 .watch-overlay p { margin: 0; }
+.watch-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 1.2em; }
 .watch-name { font-weight: 650; letter-spacing: .02em; }
+.watch-name:empty { display: none; }
+.watch-meta { font-size: .78em; color: var(--ink-dim); white-space: nowrap; }
+.watch-meta span + span::before { content: " \00b7  "; }
 .watch-state b { font-weight: 650; }
 .watch-state.bad b { color: var(--bad); }
 .watch-state span { color: var(--ink-dim); margin-left: .5em; }
@@ -222,10 +227,25 @@ button:hover { border-color: var(--ink-dim); }
 .note { margin: 12px 0 0; min-height: 1.5em; font-size: 14px; color: var(--on-ground); opacity: .85; }
 
 @media (max-width: 760px) {
-  .watch-overlay { left: 6px; bottom: 6px; max-width: calc(100% - 12px); }
-  .watch-pos { gap: .7em; }
-  .watch-pos dd { min-width: 6ch; }
   .watch-full { right: 6px; top: 6px; }
+}
+/* A picture as narrow as a phone's would be mostly box: the box goes under
+   it instead, a strip as wide as the picture, so all of the frame is seen.
+   Asked of the picture, not the window, because the picture is narrow on a
+   phone held either way: on its side, it is as wide as the window is high.
+   Stronger than any theme's box, which is drawn for over the picture. */
+@container (max-width: 640px) {
+  :root[data-theme] .watch > .watch-overlay {
+    position: static; max-width: none; width: 100%; margin: 0;
+    border-width: 0; border-top: 1px solid var(--line); border-radius: 0;
+    box-shadow: none; background: var(--sheet);
+    padding: .5em .8em .6em; font-size: 13px;
+  }
+  :root[data-theme] .watch > .watch-overlay.alone { border-top: 0; }
+  :root[data-theme="h4xx0r"] .watch > .watch-overlay { font-size: 18px; border-top: 3px double var(--double); }
+  :root[data-theme="kongress"] .watch > .watch-overlay { font-size: 14px; border-top: 2px solid #000; }
+  .watch-pos { gap: .8em; }
+  .watch-pos dd { min-width: 6ch; font-size: 1.25em; }
 }
 
 /* ----------------------------------------------------------------- coconut */
@@ -388,6 +408,7 @@ button:hover { border-color: var(--ink-dim); }
   font: clamp(17px, 2.3cqi, 40px)/1.15 var(--mono);
 }
 :root[data-theme="h4xx0r"] .watch-name { font: .75em/1.5 var(--pixel); color: var(--phosphor); letter-spacing: .08em; }
+:root[data-theme="h4xx0r"] .watch-meta { font-size: .8em; }
 :root[data-theme="h4xx0r"] .watch-state { text-transform: uppercase; }
 :root[data-theme="h4xx0r"] .watch-state b { font-weight: 400; color: var(--phosphor); }
 :root[data-theme="h4xx0r"] .watch-state b::before { content: "> "; }
@@ -600,19 +621,24 @@ button:hover { border-color: var(--ink-dim); }
   <figure class="watch" id="watch">
     <img id="watch-video" hidden>
     <p class="watch-empty" id="watch-empty" hidden></p>
-    <div class="watch-overlay" id="watch-overlay" hidden>
-      <p class="watch-name" id="watch-name"></p>
-      <p class="watch-state"><b id="watch-state"></b><span id="watch-feed"></span></p>
-      <dl class="watch-pos">
-        <div><dt>X</dt><dd id="watch-x">–</dd></div>
-        <div><dt>Y</dt><dd id="watch-y">–</dd></div>
-        <div><dt>Z</dt><dd id="watch-z">–</dd></div>
-      </dl>
-      <p class="watch-frame" id="watch-frame"></p>
-      <div class="watch-job" id="watch-job" hidden>
-        <p class="watch-file"><b id="watch-file"></b><span id="watch-pct"></span></p>
-        <div class="watch-bar"><i id="watch-bar"></i></div>
-        <p class="watch-ascii" id="watch-ascii"></p>
+    <div class="watch-overlay" id="watch-overlay">
+      <div class="watch-head">
+        <p class="watch-name" id="watch-name"></p>
+        <p class="watch-meta"><span id="watch-clock"></span><span id="watch-viewers" hidden></span></p>
+      </div>
+      <div class="watch-machine" id="watch-machine" hidden>
+        <p class="watch-state"><b id="watch-state"></b><span id="watch-feed"></span></p>
+        <dl class="watch-pos">
+          <div><dt>X</dt><dd id="watch-x">–</dd></div>
+          <div><dt>Y</dt><dd id="watch-y">–</dd></div>
+          <div><dt>Z</dt><dd id="watch-z">–</dd></div>
+        </dl>
+        <p class="watch-frame" id="watch-frame"></p>
+        <div class="watch-job" id="watch-job" hidden>
+          <p class="watch-file"><b id="watch-file"></b><span id="watch-pct"></span></p>
+          <div class="watch-bar"><i id="watch-bar"></i></div>
+          <p class="watch-ascii" id="watch-ascii"></p>
+        </div>
       </div>
     </div>
     <div class="watch-glass" aria-hidden="true"></div>
@@ -683,6 +709,8 @@ const DE = {
   "Pausing…": "Hält an …",
   "Door open": "Tür offen",
   "Not connected": "Nicht verbunden",
+  "{n} viewer": "{n} Zuschauer",
+  "{n} viewers": "{n} Zuschauer",
   "work coordinates": "Werkstückkoordinaten",
   "machine coordinates": "Maschinenkoordinaten",
   "{pct}%": "{pct} %",
@@ -783,6 +811,13 @@ function asciiBar(pct) {
 const hostOf = (url) => url.replace(/^[a-z]+:\/\//, "").replace(/\/.*$/, "");
 const nameOf = (host) => host.replace(/:\d+$/, "").replace(/\.local$/, "");
 
+/* The time where the machine is, whatever the time where it is watched:
+   14:32:05 CEST, or 14:32:05 MESZ in German. */
+const CLOCKS = {
+  en: new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Zurich", hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: "short" }),
+  de: new Intl.DateTimeFormat("de-CH", { timeZone: "Europe/Zurich", hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: "short" }),
+};
+
 (async function watch() {
   const fig = $("watch");
   const img = $("watch-video");
@@ -791,6 +826,7 @@ const nameOf = (host) => host.replace(/:\d+$/, "").replace(/\.local$/, "");
   const note = $("watch-note");
   const stateLine = fig.querySelector(".watch-state");
   const show = {
+    machine: $("watch-machine"), clock: $("watch-clock"), viewers: $("watch-viewers"),
     name: $("watch-name"), state: $("watch-state"), feed: $("watch-feed"), frame: $("watch-frame"),
     x: $("watch-x"), y: $("watch-y"), z: $("watch-z"),
     job: $("watch-job"), file: $("watch-file"), pct: $("watch-pct"),
@@ -949,6 +985,11 @@ const nameOf = (host) => host.replace(/:\d+$/, "").replace(/\.local$/, "");
     eventAt = Date.now();
     let d;
     try { d = JSON.parse(ev.data); } catch (e) { return; }
+    if (typeof d.viewers === "number") {
+      say(show.viewers, d.viewers === 1 ? "{n} viewer" : "{n} viewers", { n: d.viewers });
+      show.viewers.hidden = false;
+    }
+    if (!host) return;
     if (d.connected) {
       say(note, "Watching {machine}.", { machine });
       if (d.status) heard(d.status, d.wco);
@@ -961,14 +1002,14 @@ const nameOf = (host) => host.replace(/:\d+$/, "").replace(/\.local$/, "");
     }
   }
 
+  // The events carry the count of viewers too, so they are listened to with
+  // or without a controller; the machine's lines only with one.
   function startMachine() {
+    show.machine.hidden = !host;
     if (!host) {
-      overlay.hidden = true;
       say(note, "No FluidNC controller is set, so this is the camera alone. "
         + "Start Brušocam with -fluidnc-url= to see one here.");
-      return;
     }
-    overlay.hidden = false;
     eventAt = Date.now();
     events = new EventSource("fluidnc");
     events.onmessage = onEvent;
@@ -982,11 +1023,14 @@ const nameOf = (host) => host.replace(/:\d+$/, "").replace(/\.local$/, "");
   // Every second there is an event, changed or not; none for a while, and
   // Brušocam itself is not answering. EventSource tries again.
   setInterval(() => {
+    show.clock.textContent = CLOCKS[german() ? "de" : "en"].format(new Date());
     if (events && Date.now() - eventAt > QUIET_MS) {
-      sayState("Not connected", true);
+      show.viewers.hidden = true;
+      if (host) sayState("Not connected", true);
       say(note, "Brušocam is not answering. Trying again.");
     }
   }, 1000);
+  show.clock.textContent = CLOCKS[german() ? "de" : "en"].format(new Date());
 
   // A tab nobody is looking at stops pulling a stream off the camera, which
   // is a megabyte or so a second, and stops watching, so Brušocam can give
