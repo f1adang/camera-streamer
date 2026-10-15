@@ -18,6 +18,7 @@
 
 #include "cmd/camera-streamer/fluidnc.h"
 #include "cmd/camera-streamer/server_stats.h"
+#include "cmd/camera-streamer/victron.h"
 #include "util/http/http.h"
 #include "util/opts/log.h"
 
@@ -564,7 +565,7 @@ static void fluidnc_start()
   pthread_detach(thread);
 }
 
-static void json_string(FILE *stream, const char *s)
+void json_string(FILE *stream, const char *s)
 {
   fputc('"', stream);
   for (; *s; s++) {
@@ -639,6 +640,8 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
     json_string(stream, error);
     fputs(",\"server\":", stream);
     server_stats_json(stream);
+    fputs(",\"battery\":", stream);
+    victron_json(stream);
     fputs("}\n\n", stream);
     bool gone = fflush(stream) || ferror(stream);
 

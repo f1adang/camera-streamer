@@ -14,7 +14,8 @@ Build-Depends:
   xxd,
   build-essential,
   cmake,
-  libssl-dev
+  libssl-dev,
+  libsystemd-dev
 Standards-Version: 4.5.1
 Homepage: https://github.com/ayufan/camera-streamer
 Vcs-Browser: https://github.com/ayufan/camera-streamer

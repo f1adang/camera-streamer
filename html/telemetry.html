@@ -227,25 +227,33 @@ button:hover { border-color: var(--ink-dim); }
 
 .note { margin: 12px 0 0; min-height: 1.5em; font-size: 14px; color: var(--on-ground); opacity: .85; }
 
-/* The server the picture comes from: under it, as wide as it (the same
-   rule, from the same --aspect), a panel of figures rather than a box over
-   the picture. */
-.server {
+/* The battery and the server the picture comes from: under it, as wide as
+   it (the same rule, from the same --aspect), panels of figures rather than
+   a box over the picture. */
+.panel {
   max-width: max(320px, calc((100vh - 170px) * var(--aspect, 1.7778)));
   margin: 18px auto 0; padding: 14px 16px;
   background: var(--sheet); border: 1px solid var(--line); border-radius: 6px;
 }
-.server h2 { margin: 0; font-size: 15px; font-weight: 650; }
-.server-model { margin: 2px 0 0; font-size: 13px; color: var(--ink-dim); }
-.server-model:empty { display: none; }
-.server-stats {
+.panel h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.panel-sub { margin: 2px 0 0; font-size: 13px; color: var(--ink-dim); }
+.panel-sub:empty { display: none; }
+.panel-stats {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px 18px; margin: 12px 0 0;
 }
-.server-stats dt { font-size: 12px; color: var(--ink-dim); }
-.server-stats dd { margin: 0; font: 600 15px/1.35 var(--mono); }
-.server-stats .bad { color: var(--bad); }
-.server-stats .warn { color: var(--warn); }
+.panel-stats dt { font-size: 12px; color: var(--ink-dim); }
+.panel-stats dd { margin: 0; font: 600 15px/1.35 var(--mono); }
+.panel-stats .bad { color: var(--bad); }
+.panel-stats .warn { color: var(--warn); }
+.panel-note { margin: 10px 0 0; font-size: 13px; color: var(--ink-dim); }
+.panel-note.bad { color: var(--bad); }
+.panel-note:empty { display: none; }
+/* The charge as a bar under its figure, or as the terminal draws one. */
+.panel-bar { height: .35em; margin-top: .25em; background: var(--line-soft); border-radius: 2px; overflow: hidden; }
+.panel-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+.panel-bar.bad i { background: var(--bad); }
+.panel-ascii { display: none; white-space: pre; }
 
 @media (max-width: 760px) {
   .watch-full { right: 6px; top: 6px; }
@@ -281,7 +289,7 @@ button:hover { border-color: var(--ink-dim); }
 :root[data-theme="coconut"] h1::after { content: " 🥥"; font-size: .85em; }
 :root[data-theme="coconut"] .sub, :root[data-theme="coconut"] .sub b,
 :root[data-theme="coconut"] footer, :root[data-theme="coconut"] header nav { color: #cfe8bd; }
-:root[data-theme="coconut"] .watch, :root[data-theme="coconut"] .server { border-width: 2px; border-radius: 16px; }
+:root[data-theme="coconut"] .watch, :root[data-theme="coconut"] .panel { border-width: 2px; border-radius: 16px; }
 :root[data-theme="coconut"] .watch-overlay { border-width: 2px; border-radius: 12px; }
 
 /* -------------------------------------------------------------- pinkograph */
@@ -304,20 +312,21 @@ button:hover { border-color: var(--ink-dim); }
   animation: pk-hum-up 2.6s ease-in-out infinite;
 }
 :root[data-theme="pinkograph"] h1,
-:root[data-theme="pinkograph"] .server h2,
+:root[data-theme="pinkograph"] .panel h2,
 :root[data-theme="pinkograph"] .watch-name,
 :root[data-theme="pinkograph"] .watch-pos dd {
   color: var(--neon);
   text-shadow: 0 0 6px rgba(255,107,181,.95), 0 0 18px rgba(255,107,181,.55);
 }
 :root[data-theme="pinkograph"] .watch, :root[data-theme="pinkograph"] .watch-overlay,
-:root[data-theme="pinkograph"] .server {
+:root[data-theme="pinkograph"] .panel {
   border: 1px solid rgba(255,107,181,.75);
   box-shadow: 0 0 10px rgba(255,107,181,.48), 0 0 26px rgba(255,107,181,.26),
               inset 0 0 16px rgba(255,107,181,.10);
 }
 :root[data-theme="pinkograph"] .watch-overlay { background: rgba(22,3,42,.86); }
-:root[data-theme="pinkograph"] .watch-bar i { background: linear-gradient(90deg, var(--neon), var(--neon-cold)); }
+:root[data-theme="pinkograph"] .watch-bar i,
+:root[data-theme="pinkograph"] .panel-bar i { background: linear-gradient(90deg, var(--neon), var(--neon-cold)); }
 :root[data-theme="pinkograph"] button, :root[data-theme="pinkograph"] .theme-picker select {
   background: #2C0857; border-color: var(--neon); color: var(--ink);
 }
@@ -354,14 +363,14 @@ button:hover { border-color: var(--ink-dim); }
   animation: pride-run 9s linear infinite, neon-flicker 6s infinite steps(1);
 }
 :root[data-theme="uwu"] .watch, :root[data-theme="uwu"] .watch-overlay,
-:root[data-theme="uwu"] .server {
+:root[data-theme="uwu"] .panel {
   box-shadow: 0 0 0 1px rgba(255,45,149,.5), 0 0 26px -10px var(--neon),
               inset 0 0 30px -22px var(--neon-2);
 }
 :root[data-theme="uwu"] .watch-overlay { background: rgba(43,8,36,.86); }
-:root[data-theme="uwu"] .watch-name, :root[data-theme="uwu"] .server h2 { color: #fff; text-shadow: var(--glow); }
+:root[data-theme="uwu"] .watch-name, :root[data-theme="uwu"] .panel h2 { color: #fff; text-shadow: var(--glow); }
 :root[data-theme="uwu"] .watch-pos dd { color: var(--neon-2); text-shadow: 0 0 8px rgba(255,138,212,.55); }
-:root[data-theme="uwu"] .watch-bar i { background: var(--pride); background-size: 320% 100%; animation: pride-run 6s linear infinite; }
+:root[data-theme="uwu"] .watch-bar i, :root[data-theme="uwu"] .panel-bar i { background: var(--pride); background-size: 320% 100%; animation: pride-run 6s linear infinite; }
 :root[data-theme="uwu"] button, :root[data-theme="uwu"] .theme-picker select { background: var(--sunk); border-color: var(--neon); }
 @keyframes pride-run { to { background-position: 320% 0; } }
 @keyframes neon-flicker {
@@ -373,14 +382,14 @@ button:hover { border-color: var(--ink-dim); }
 :root[data-theme="kongress"] body { font-size: 16px; line-height: 1.6; }
 :root[data-theme="kongress"] * { border-radius: 0; }
 :root[data-theme="kongress"] h1, :root[data-theme="kongress"] .watch-name,
-:root[data-theme="kongress"] .server h2 {
+:root[data-theme="kongress"] .panel h2 {
   font-family: 'UnifrakturCook', 'UnifrakturMaguntia', 'Fraktur', serif;
   font-weight: 700; letter-spacing: .04em;
 }
 :root[data-theme="kongress"] h1 { font-size: 22px; }
 :root[data-theme="kongress"] header { border-bottom: 3px double #000; box-shadow: 0 2px 0 rgba(0,0,0,.08); }
 :root[data-theme="kongress"] footer { border-top: 3px double #000; box-shadow: 0 -2px 0 rgba(0,0,0,.08); }
-:root[data-theme="kongress"] .watch, :root[data-theme="kongress"] .server { border: 2px solid #000; box-shadow: 3px 3px 0 #000; }
+:root[data-theme="kongress"] .watch, :root[data-theme="kongress"] .panel { border: 2px solid #000; box-shadow: 3px 3px 0 #000; }
 :root[data-theme="kongress"] .watch-overlay { border: 2px solid #000; box-shadow: 2px 2px 0 #000; background: rgba(247,246,241,.92); }
 :root[data-theme="kongress"] button, :root[data-theme="kongress"] .theme-picker select {
   background: var(--sheet); color: #000; border: 1.5px solid #000; box-shadow: 1px 1px 0 #000;
@@ -423,7 +432,7 @@ button:hover { border-color: var(--ink-dim); }
 :root[data-theme="h4xx0r"] h1::after { content: "\2588"; margin-left: .3em; animation: h4x-blink 1s steps(1) infinite; }
 
 :root[data-theme="h4xx0r"] .watch, :root[data-theme="h4xx0r"] .watch-overlay,
-:root[data-theme="h4xx0r"] .server {
+:root[data-theme="h4xx0r"] .panel {
   border: 3px double var(--double);
   box-shadow: 0 0 0 1px rgba(51,255,51,.15), 0 0 18px rgba(51,255,51,.12),
               inset 0 0 24px rgba(51,255,51,.04);
@@ -435,20 +444,24 @@ button:hover { border-color: var(--ink-dim); }
 }
 :root[data-theme="h4xx0r"] .watch-name { font: .75em/1.5 var(--pixel); color: var(--phosphor); letter-spacing: .08em; }
 :root[data-theme="h4xx0r"] .watch-meta { font-size: .8em; }
-:root[data-theme="h4xx0r"] .server h2 {
+:root[data-theme="h4xx0r"] .panel h2 {
   font: 14px/1.6 var(--pixel); letter-spacing: .05em; text-transform: uppercase; color: var(--phosphor);
 }
-:root[data-theme="h4xx0r"] .server h2::before { content: "> "; }
-:root[data-theme="h4xx0r"] .server-model { font-size: 18px; }
-:root[data-theme="h4xx0r"] .server-stats dt { font: 11px/1.6 var(--pixel); letter-spacing: .05em; }
-:root[data-theme="h4xx0r"] .server-stats dd {
+:root[data-theme="h4xx0r"] .panel h2::before { content: "> "; }
+:root[data-theme="h4xx0r"] .panel-sub { font-size: 18px; }
+:root[data-theme="h4xx0r"] .panel-stats dt { font: 11px/1.6 var(--pixel); letter-spacing: .05em; }
+:root[data-theme="h4xx0r"] .panel-stats dd {
   font-size: 24px; font-weight: 400; color: var(--phosphor); text-shadow: 0 0 4px rgba(51,255,51,.55);
 }
 /* An error is reverse video in the hot green, a warning underlined. */
-:root[data-theme="h4xx0r"] .server-stats .bad {
+:root[data-theme="h4xx0r"] .panel-stats .bad {
   display: inline-block; padding: 0 .25em; background: var(--hot); color: var(--on-green); text-shadow: none;
 }
-:root[data-theme="h4xx0r"] .server-stats .warn { text-decoration: underline; text-underline-offset: .15em; }
+:root[data-theme="h4xx0r"] .panel-stats .warn { text-decoration: underline; text-underline-offset: .15em; }
+:root[data-theme="h4xx0r"] .panel-note { font-size: 18px; }
+:root[data-theme="h4xx0r"] .panel-note.bad::before { content: "!! "; }
+:root[data-theme="h4xx0r"] .panel-bar { display: none; }
+:root[data-theme="h4xx0r"] .panel-ascii { display: block; font-size: 18px; color: var(--phosphor); }
 :root[data-theme="h4xx0r"] .watch-state { text-transform: uppercase; }
 :root[data-theme="h4xx0r"] .watch-state b { font-weight: 400; color: var(--phosphor); }
 :root[data-theme="h4xx0r"] .watch-state b::before { content: "> "; }
@@ -686,11 +699,35 @@ button:hover { border-color: var(--ink-dim); }
   </figure>
   <p class="note" id="watch-note"></p>
 
-  <section class="server" id="server" hidden>
+  <section class="panel" id="battery" hidden>
+    <h2 id="bat-name"></h2>
+    <p class="panel-sub" id="bat-model"></p>
+    <dl class="panel-stats">
+      <div id="bat-soc-row">
+        <dt data-t>Charge</dt><dd id="bat-soc"></dd>
+        <div class="panel-bar" id="bat-bar"><i id="bat-bar-fill"></i></div>
+        <p class="panel-ascii" id="bat-ascii"></p>
+      </div>
+      <div id="bat-voltage-row"><dt data-t>Voltage</dt><dd id="bat-voltage"></dd></div>
+      <div id="bat-current-row"><dt id="bat-current-label" data-t>Current</dt><dd id="bat-current"></dd></div>
+      <div id="bat-power-row"><dt data-t>Power</dt><dd id="bat-power"></dd></div>
+      <div id="bat-consumed-row"><dt data-t>Consumed</dt><dd id="bat-consumed"></dd></div>
+      <div id="bat-ttg-row"><dt data-t>Time to go</dt><dd id="bat-ttg"></dd></div>
+      <div id="bat-temp-row"><dt data-t>Battery temperature</dt><dd id="bat-temp"></dd></div>
+      <div id="bat-starter-row"><dt data-t>Starter battery</dt><dd id="bat-starter"></dd></div>
+      <div id="bat-mid-row"><dt data-t>Midpoint</dt><dd id="bat-mid"></dd></div>
+      <div id="bat-alarm-row"><dt data-t>Alarm</dt><dd id="bat-alarm"></dd></div>
+      <div id="bat-rssi-row"><dt data-t>Bluetooth signal</dt><dd id="bat-rssi"></dd></div>
+      <div id="bat-age-row"><dt data-t>Last heard</dt><dd id="bat-age"></dd></div>
+    </dl>
+    <p class="panel-note" id="bat-note"></p>
+  </section>
+
+  <section class="panel" id="server" hidden>
     <h2 data-t>Brušocam server</h2>
-    <p class="server-model" id="server-model"></p>
-    <dl class="server-stats">
-      <div id="srv-power-row"><dt data-t>Power</dt><dd id="srv-power"></dd></div>
+    <p class="panel-sub" id="server-model"></p>
+    <dl class="panel-stats">
+      <div id="srv-power-row"><dt data-t>Power supply</dt><dd id="srv-power"></dd></div>
       <div id="srv-throttle-row"><dt data-t>Throttling</dt><dd id="srv-throttle"></dd></div>
       <div id="srv-temp-row"><dt data-t>CPU temperature</dt><dd id="srv-temp"></dd></div>
       <div id="srv-mhz-row"><dt data-t>CPU clock</dt><dd id="srv-mhz"></dd></div>
@@ -731,11 +768,17 @@ button:hover { border-color: var(--ink-dim); }
  * long-lived response as /stream is, with the latest report and the work
  * offset, which the controller sends only every few reports. An event comes
  * at least every second, so silence means Brušocam has gone, and the
- * browser's EventSource reconnects by itself. */
+ * browser's EventSource reconnects by itself.
+ *
+ * Under the picture, the events also carry the battery, a Victron battery
+ * monitor Brušocam hears over Bluetooth (-victron-mac), and the health of
+ * Brušocam's own server. */
 const QUIET_MS = 5000;                     // no event this long, and it says so
 const CAMERA_RETRY_MS = 10000;
 const CAMERA_FIRST_MS = 8000;              // no picture by then, and it is down
 const BAR_CELLS = 24;
+const BATTERY_BAR_CELLS = 12;
+const HEARD_LATE_MS = 10000;               // the battery's figures older than this, and it says so
 const THEME_KEY = "brusocam-theme";
 
 const $ = (id) => document.getElementById(id);
@@ -773,7 +816,7 @@ const DE = {
   "feed {pct}%": "Vorschub {pct} %",
   "{speed} mm/min · feed {pct}%": "{speed} mm/min · Vorschub {pct} %",
   "Brušocam server": "Brušocam-Server",
-  "Power": "Stromversorgung",
+  "Power supply": "Stromversorgung",
   "Throttling": "Drosselung",
   "CPU temperature": "Prozessortemperatur",
   "CPU clock": "Prozessortakt",
@@ -803,6 +846,42 @@ const DE = {
   "{h} h {m} min": "{h} Std. {m} Min.",
   "{m} min": "{m} Min.",
   "machine coordinates": "Maschinenkoordinaten",
+  "{name} Stats": "{name}-Messwerte",
+  "Charge": "Ladezustand",
+  "Voltage": "Spannung",
+  "Current": "Strom",
+  "Power": "Leistung",
+  "Consumed": "Entnommen",
+  "Time to go": "Restlaufzeit",
+  "Battery temperature": "Batterietemperatur",
+  "Starter battery": "Starterbatterie",
+  "Midpoint": "Mittelpunkt",
+  "Bluetooth signal": "Bluetooth-Signal",
+  "Last heard": "Zuletzt empfangen",
+  "{v} V": "{v} V",
+  "{a} A": "{a} A",
+  "Charging": "Ladestrom",
+  "Discharging": "Entladestrom",
+  "{w} W": "{w} W",
+  "{ah} Ah": "{ah} Ah",
+  "{n} s ago": "vor {n} s",
+  "{m} min ago": "vor {m} Min.",
+  "{h} h ago": "vor {h} Std.",
+  "Listening for {name}…": "Warte auf {name} …",
+  "Low voltage": "Unterspannung",
+  "High voltage": "Überspannung",
+  "Low state of charge": "Niedriger Ladezustand",
+  "Low starter voltage": "Starterbatterie: Unterspannung",
+  "High starter voltage": "Starterbatterie: Überspannung",
+  "Low temperature": "Untertemperatur",
+  "High temperature": "Übertemperatur",
+  "Midpoint deviation": "Mittelpunktabweichung",
+  "Overload": "Überlast",
+  "DC ripple": "DC-Welligkeit",
+  "Low AC output voltage": "AC-Ausgang: Unterspannung",
+  "High AC output voltage": "AC-Ausgang: Überspannung",
+  "Short circuit": "Kurzschluss",
+  "BMS lockout": "BMS-Sperre",
   "{pct}%": "{pct} %",
   "{bar} {pct}%": "{bar} {pct} %",
   "{file} · all sent": "{file} · vollständig übertragen",
@@ -891,9 +970,9 @@ function mm(v) {
 }
 
 /* [██████████░░░░░░░░░░░░░░] — the bar as the h4xx0r terminal draws it. */
-function asciiBar(pct) {
-  const full = Math.round(Math.min(100, Math.max(0, pct)) / 100 * BAR_CELLS);
-  return "[" + "█".repeat(full) + "░".repeat(BAR_CELLS - full) + "]";
+function asciiBar(pct, cells = BAR_CELLS) {
+  const full = Math.round(Math.min(100, Math.max(0, pct)) / 100 * cells);
+  return "[" + "█".repeat(full) + "░".repeat(cells - full) + "]";
 }
 
 /* "http://testikel.local:80/" -> "testikel.local", for the header, and
@@ -1082,13 +1161,15 @@ const CLOCKS = {
   /* The firmware's throttled flags: bits 0-3 under-voltage, clock capped,
      throttled and soft temperature limit now, bits 16-19 the same since boot.
      What is wrong now is an error; what was wrong since boot, a warning. */
-  function serverRow(id, value, text, vars, level) {
-    $(`srv-${id}-row`).hidden = value === null || value === undefined;
-    if ($(`srv-${id}-row`).hidden) return;
-    const dd = $(`srv-${id}`);
+  function panelRow(id, value, text, vars, level) {
+    const row = $(`${id}-row`);
+    row.hidden = value === null || value === undefined;
+    if (row.hidden) return;
+    const dd = $(id);
     say(dd, text, vars);
     dd.className = level || "";
   }
+  const serverRow = (id, ...rest) => panelRow(`srv-${id}`, ...rest);
 
   function uptimeOf(s) {
     const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
@@ -1141,10 +1222,88 @@ const CLOCKS = {
     else serverRow("uptime", v.uptime_s, ...uptimeOf(v.uptime_s));
   }
 
+  /* ---- the battery ---- */
+  /* What the monitor reports, as VictronConnect would show it. The alarm
+     reasons are a bit each; the figure an alarm is about is shown as an
+     error, and the alarm row names them all. */
+  const ALARMS = [
+    [0x1, "Low voltage"], [0x2, "High voltage"], [0x4, "Low state of charge"],
+    [0x8, "Low starter voltage"], [0x10, "High starter voltage"],
+    [0x20, "Low temperature"], [0x40, "High temperature"], [0x80, "Midpoint deviation"],
+    [0x100, "Overload"], [0x200, "DC ripple"], [0x400, "Low AC output voltage"],
+    [0x800, "High AC output voltage"], [0x1000, "Short circuit"], [0x2000, "BMS lockout"],
+  ];
+  const batteryRow = (id, ...rest) => panelRow(`bat-${id}`, ...rest);
+
+  /* +8.42, −2.31 or 0.00: the sign of a flow says which way it goes, and a
+     figure that rounds to nothing has none. */
+  function signed(v, digits) {
+    const s = Math.abs(v).toFixed(digits);
+    if (Number(s) === 0) return s;
+    return (v < 0 ? "\u2212" : "+") + s;
+  }
+
+  function showBattery(b) {
+    $("battery").hidden = false;
+    say($("bat-name"), "{name} Stats", { name: b.name });
+    $("bat-model").textContent = b.model || "";
+
+    // Nothing heard yet, and every row is hidden.
+    const heard = typeof b.age === "number";
+    const v = heard ? b : {};
+    const alarm = v.alarm || 0;
+    const on = (bits) => (alarm & bits ? "bad" : "");
+
+    batteryRow("soc", v.soc, "{pct}%", { pct: v.soc?.toFixed(1) }, on(0x4));
+    if (typeof v.soc === "number") {
+      $("bat-bar-fill").style.width = `${Math.min(100, Math.max(0, v.soc))}%`;
+      $("bat-bar").classList.toggle("bad", !!(alarm & 0x4));
+      $("bat-ascii").textContent = asciiBar(v.soc, BATTERY_BAR_CELLS);
+    }
+    batteryRow("voltage", v.voltage, "{v} V", { v: v.voltage?.toFixed(2) }, on(0x3));
+    // Which way it flows is in the label, so the figure fits its column.
+    const amps = v.current;
+    say($("bat-current-label"), amps >= 0.005 ? "Charging" : amps <= -0.005 ? "Discharging" : "Current");
+    batteryRow("current", amps, "{a} A", { a: typeof amps === "number" ? signed(amps, 2) : "" });
+    const watts = typeof amps === "number" && typeof v.voltage === "number" ? amps * v.voltage : null;
+    batteryRow("power", watts, "{w} W", { w: watts === null ? "" : signed(watts, 0) });
+    batteryRow("consumed", v.consumed_ah, "{ah} Ah", { ah: v.consumed_ah?.toFixed(1) });
+    // None while it charges, as in VictronConnect.
+    if (typeof v.ttg_min === "number") batteryRow("ttg", v.ttg_min, ...uptimeOf(v.ttg_min * 60));
+    else batteryRow("ttg", null);
+    batteryRow("temp", v.temperature, "{t} °C", { t: v.temperature?.toFixed(1) }, on(0x60));
+    batteryRow("starter", v.starter_voltage, "{v} V", { v: v.starter_voltage?.toFixed(2) }, on(0x18));
+    batteryRow("mid", v.midpoint_voltage, "{v} V", { v: v.midpoint_voltage?.toFixed(2) }, on(0x80));
+    // Said only when there is one; the names are in the language of the
+    // moment, and the next event says them again after a change of theme.
+    const reasons = ALARMS.filter(([bit]) => alarm & bit).map(([, text]) => t(text));
+    batteryRow("alarm", reasons.length ? alarm : null, reasons.join(", "), null, "bad");
+
+    const rssi = v.rssi;
+    batteryRow("rssi", rssi,
+      rssi >= -75 ? "{dbm} dBm · good" : rssi >= -88 ? "{dbm} dBm · fair" : "{dbm} dBm · weak",
+      { dbm: String(rssi).replace("-", "\u2212") }, rssi < -88 ? "warn" : "");
+
+    // A reading a second old is the usual; one older is said, and an old
+    // one is an error. It is still shown: it is the last there is.
+    const age = heard && b.age >= HEARD_LATE_MS ? b.age : null;
+    const late = age === null ? [] : age < 60000 ? ["{n} s ago", { n: Math.round(age / 1000) }]
+      : age < 3600000 ? ["{m} min ago", { m: Math.round(age / 60000) }]
+      : ["{h} h ago", { h: Math.round(age / 3600000) }];
+    batteryRow("age", age, ...late, age >= 300000 ? "bad" : "warn");
+
+    const note = $("bat-note");
+    if (b.error) say(note, b.error + ".");
+    else if (!heard) say(note, "Listening for {name}…", { name: b.name });
+    else say(note, "");
+    note.classList.toggle("bad", !!b.error);
+  }
+
   function onEvent(ev) {
     eventAt = Date.now();
     let d;
     try { d = JSON.parse(ev.data); } catch (e) { return; }
+    if (d.battery) showBattery(d.battery);
     if (d.server) showServer(d.server);
     if (typeof d.viewers === "number") {
       say(show.viewers, d.viewers === 1 ? "{n} viewer" : "{n} viewers", { n: d.viewers });
