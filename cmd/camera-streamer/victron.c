@@ -1,6 +1,6 @@
-// A Victron battery monitor - a SmartShunt, a BMV, or one on a VE.Direct
-// Bluetooth Smart dongle - heard over Bluetooth, for the battery panel on
-// /telemetry.
+// A Victron battery monitor - a SmartShunt, a BMV - or solar charger - a
+// SmartSolar or BlueSolar MPPT, or either on a VE.Direct Bluetooth Smart
+// dongle - heard over Bluetooth, for the battery's box on /telemetry.
 //
 // With Instant Readout on, the monitor puts its figures into every
 // advertisement it sends, encrypted, about once a second, to anybody near
@@ -15,6 +15,7 @@
 // radio, and a scan takes time from the stream.
 
 #include "cmd/camera-streamer/victron.h"
+#include "cmd/camera-streamer/victron_models.h"
 #include "cmd/camera-streamer/fluidnc.h"
 #include "util/opts/log.h"
 #include "version.h"
@@ -37,22 +38,34 @@
 #define VICTRON_DEAD_MS     60000  // nothing heard this long, and it starts the scan over
 #define VICTRON_RETRY_MS    10000
 #define VICTRON_COMPANY     0x02e1 // Victron's Bluetooth company identifier
+#define VICTRON_SOLAR_CHARGER    0x01  // the record types
+#define VICTRON_BATTERY_MONITOR  0x02
 #define VICTRON_ERROR       256
 
 extern victron_options_t victron_options;
 
-// What the monitor reports. NAN, or -1, is what it says it does not know.
+// What the device reports. NAN, or -1, is what it says it does not know.
 typedef struct {
   uint16_t model;
+  int record;                // VICTRON_BATTERY_MONITOR or VICTRON_SOLAR_CHARGER
+  double voltage;            // the battery's
+  double current;            // A, the battery's, positive while charging
+
+  // A battery monitor's
   int ttg_min;               // time to go, in minutes
-  double voltage;
-  double current;            // A, positive while charging
   double consumed_ah;
   double soc;                // %
   unsigned alarm;            // the alarm reasons, a bit each
   double temperature;        // °C, the aux input as a temperature sensor
   double starter_voltage;    // V, the aux input on a second battery
   double midpoint_voltage;   // V, the aux input on the middle of the bank
+
+  // A solar charger's
+  int charge_state;          // 0 off, 3 bulk, 4 absorption, 5 float …
+  int charger_error;         // "Err 2", 0 none
+  double yield_wh;           // today
+  double pv_w;               // from the panels, now
+  double load_a;             // on its load output
 } victron_reading_t;
 
 static struct {
@@ -79,27 +92,11 @@ static uint64_t now_ms()
 
 static const char *victron_model(uint16_t model)
 {
-  switch (model) {
-  case 0x0203: return "BMV-700";
-  case 0x0204: return "BMV-702";
-  case 0x0205: return "BMV-700H";
-  case 0xA380: return "BMV-710 Smart";
-  case 0xA381: return "BMV-712 Smart";
-  case 0xA382: return "BMV-710H Smart";
-  case 0xA383: return "BMV-712 Smart";
-  case 0xA389: return "SmartShunt 500A/50mV";
-  case 0xA38A: return "SmartShunt 1000A/50mV";
-  case 0xA38B: return "SmartShunt 2000A/50mV";
-  case 0xA38C: return "SmartShunt IP67 500A/50mV";
-  case 0xA38D: return "SmartShunt IP67 1000A/50mV";
-  case 0xA38E: return "SmartShunt IP67 2000A/50mV";
-  case 0xC030: case 0xC035: return "SmartShunt IP65 500A/50mV";
-  case 0xC031: case 0xC036: return "SmartShunt IP65 1000A/50mV";
-  case 0xC032: case 0xC037: return "SmartShunt IP65 2000A/50mV";
-  case 0xC034: return "BMV-800 Smart";
-  case 0xC038: return "SmartShunt 300A/50mV";
-  default: return NULL;
+  for (size_t i = 0; i < sizeof(victron_models) / sizeof(victron_models[0]); i++) {
+    if (victron_models[i].id == model)
+      return victron_models[i].name;
   }
+  return NULL;
 }
 
 static void victron_set_error(const char *error)
@@ -112,7 +109,6 @@ static void victron_set_error(const char *error)
 #ifdef USE_VICTRON
 
 #define VICTRON_PREFIX           0x10
-#define VICTRON_BATTERY_MONITOR  0x02  // the record type
 
 #define TRY(x) do { int r_ = (x); if (r_ < 0) return r_; } while (0)
 
@@ -188,8 +184,11 @@ static int32_t to_signed(uint32_t value, unsigned n)
 // key is the right one before anything is decrypted with it - and the
 // record, encrypted. A battery monitor's record is, in bits: time to go 16,
 // voltage 16 signed, alarm 16, aux 16, aux input 2, current 22 signed,
-// consumed Ah 20, state of charge 10; each all ones (the signed ones,
-// their greatest value) where the monitor does not know it.
+// consumed Ah 20, state of charge 10. A solar charger's: charge state 8,
+// charger error 8, battery voltage 16 signed, battery current 16 signed in
+// 0.1 A, yield today 16 in 10 Wh, PV power 16 in W, load current 9 in
+// 0.1 A. Each is all ones (the signed ones, their greatest value) where the
+// device does not know it.
 static int victron_decode(const uint8_t *data, size_t len, victron_reading_t *out, char *error, size_t error_len)
 {
   uint8_t record[32] = { 0 };
@@ -197,16 +196,19 @@ static int victron_decode(const uint8_t *data, size_t len, victron_reading_t *ou
   if (len < 8 || data[0] != VICTRON_PREFIX)
     return 1; // not an Instant Readout: Victron advertises other things too
 
-  if (data[4] != VICTRON_BATTERY_MONITOR) {
-    snprintf(error, error_len, "This Victron device is not a battery monitor (record type 0x%02x)", data[4]);
+  int type = data[4];
+  if (type != VICTRON_BATTERY_MONITOR && type != VICTRON_SOLAR_CHARGER) {
+    snprintf(error, error_len, "This Victron device is neither a battery monitor nor a solar "
+      "charger (record type 0x%02x)", type);
     return -1;
   }
   if (data[7] != victron_key[0]) {
     snprintf(error, error_len, "The encryption key does not fit; it changes with the Bluetooth PIN");
     return -1;
   }
-  if (len - 8 < 15 || len - 8 > sizeof(record)) {
-    snprintf(error, error_len, "A battery monitor's record of %zu bytes is not one", len - 8);
+  size_t need = type == VICTRON_BATTERY_MONITOR ? 15 : 11;
+  if (len - 8 < need || len - 8 > sizeof(record)) {
+    snprintf(error, error_len, "A record of type 0x%02x of %zu bytes is not one", type, len - 8);
     return -1;
   }
   if (victron_decrypt(data[5] | data[6] << 8, data + 8, len - 8, record) < 0) {
@@ -214,7 +216,35 @@ static int victron_decode(const uint8_t *data, size_t len, victron_reading_t *ou
     return -1;
   }
 
+  out->model = data[2] | data[3] << 8;
+  out->record = type;
+  out->ttg_min = -1;
+  out->consumed_ah = out->soc = NAN;
+  out->alarm = 0;
+  out->temperature = out->starter_voltage = out->midpoint_voltage = NAN;
+  out->charge_state = out->charger_error = -1;
+  out->yield_wh = out->pv_w = out->load_a = NAN;
+
   unsigned at = 0;
+  if (type == VICTRON_SOLAR_CHARGER) {
+    uint32_t state = read_bits(record, &at, 8);
+    uint32_t charger_error = read_bits(record, &at, 8);
+    uint32_t voltage = read_bits(record, &at, 16);
+    uint32_t current = read_bits(record, &at, 16);
+    uint32_t yield = read_bits(record, &at, 16);
+    uint32_t pv = read_bits(record, &at, 16);
+    uint32_t load = read_bits(record, &at, 9);
+
+    out->charge_state = state == 0xff ? -1 : (int)state;
+    out->charger_error = charger_error == 0xff ? -1 : (int)charger_error;
+    out->voltage = voltage == 0x7fff ? NAN : to_signed(voltage, 16) / 100.0;
+    out->current = current == 0x7fff ? NAN : to_signed(current, 16) / 10.0;
+    out->yield_wh = yield == 0xffff ? NAN : yield * 10.0;
+    out->pv_w = pv == 0xffff ? NAN : pv;
+    out->load_a = load == 0x1ff ? NAN : load / 10.0;
+    return 0;
+  }
+
   uint32_t ttg = read_bits(record, &at, 16);
   uint32_t voltage = read_bits(record, &at, 16);
   uint32_t alarm = read_bits(record, &at, 16);
@@ -224,14 +254,12 @@ static int victron_decode(const uint8_t *data, size_t len, victron_reading_t *ou
   uint32_t consumed = read_bits(record, &at, 20);
   uint32_t soc = read_bits(record, &at, 10);
 
-  out->model = data[2] | data[3] << 8;
   out->ttg_min = ttg == 0xffff ? -1 : (int)ttg;
   out->voltage = voltage == 0x7fff ? NAN : to_signed(voltage, 16) / 100.0;
   out->alarm = alarm;
   out->current = current == 0x1fffff ? NAN : to_signed(current, 22) / 1000.0;
   out->consumed_ah = consumed == 0xfffff ? NAN : consumed / 10.0;
   out->soc = soc == 0x3ff ? NAN : soc / 10.0;
-  out->temperature = out->starter_voltage = out->midpoint_voltage = NAN;
   if (aux_input == 0 && aux != 0x7fff)
     out->starter_voltage = to_signed(aux, 16) / 100.0;
   else if (aux_input == 1 && aux != 0xffff)
@@ -614,7 +642,8 @@ void victron_json(FILE *stream)
     return;
   }
 
-  fprintf(stream, ",\"age\":%llu", (unsigned long long)(now - heard_at));
+  fprintf(stream, ",\"age\":%llu,\"kind\":\"%s\"", (unsigned long long)(now - heard_at),
+    r.record == VICTRON_SOLAR_CHARGER ? "solar_charger" : "battery_monitor");
   if (have_rssi)
     fprintf(stream, ",\"rssi\":%d", rssi);
   else
@@ -631,5 +660,10 @@ void victron_json(FILE *stream)
   json_number(stream, "temperature", "%.1f", r.temperature);
   json_number(stream, "starter_voltage", "%.2f", r.starter_voltage);
   json_number(stream, "midpoint_voltage", "%.2f", r.midpoint_voltage);
+  json_number(stream, "charge_state", "%.0f", r.charge_state >= 0 ? r.charge_state : NAN);
+  json_number(stream, "charger_error", "%.0f", r.charger_error >= 0 ? r.charger_error : NAN);
+  json_number(stream, "yield_wh", "%.0f", r.yield_wh);
+  json_number(stream, "pv_w", "%.0f", r.pv_w);
+  json_number(stream, "load_a", "%.1f", r.load_a);
   fputs("}", stream);
 }
