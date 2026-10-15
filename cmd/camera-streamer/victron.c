@@ -546,7 +546,7 @@ void victron_json(FILE *stream)
   const char *model = heard_at ? victron_model(r.model) : NULL;
   char unknown[32];
   if (heard_at && !model) {
-    snprintf(unknown, sizeof(unknown), "Victron product 0x%04X", r.model);
+    snprintf(unknown, sizeof(unknown), "product 0x%04X", r.model);
     model = unknown;
   }
 

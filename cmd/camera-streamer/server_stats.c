@@ -1,5 +1,6 @@
-// The health of the host camera-streamer runs on, for the server panel on
-// /telemetry: what the board is, whether its supply has sagged or it has
+// The health of the host camera-streamer runs on, for the server box on
+// /telemetry: what the board is - its model, SoC, CPU, clock and memory -
+// and the camera's sensor, whether its supply has sagged or it has
 // throttled, how hot it is, how loaded, its Wi-Fi signal, what it sends, and
 // the stream's frame rate.
 //
@@ -10,8 +11,10 @@
 
 #include "cmd/camera-streamer/server_stats.h"
 #include "device/buffer_lock.h"
+#include "device/camera/camera.h"
 #include "output/output.h"
 
+#include <ctype.h>
 #include <dirent.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -19,11 +22,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #define SERVER_STATS_MS 1000
 
+extern camera_options_t camera_options;
+
 static pthread_mutex_t server_stats_lock = PTHREAD_MUTEX_INITIALIZER;
-static char server_stats[1024] = "{}";
+static char server_stats[1536] = "{}";
 static uint64_t sampled_at;
 static unsigned long long last_tx;
 static int last_frames;
@@ -48,8 +54,16 @@ static bool read_line(const char *path, char *buf, size_t len)
   return ok;
 }
 
-// "Raspberry Pi Zero 2 W Rev 1.0", as the firmware names the board. Kept to
-// what can go in a JSON string unescaped.
+// Kept to what can go in a JSON string unescaped.
+static void json_safe(char *s)
+{
+  for (; *s; s++) {
+    if (*s == '"' || *s == '\\' || (unsigned char)*s < 0x20)
+      *s = ' ';
+  }
+}
+
+// "Raspberry Pi Zero 2 W Rev 1.0", as the firmware names the board.
 static void read_model(char *model, size_t len)
 {
   FILE *f = fopen("/proc/device-tree/model", "r");
@@ -60,10 +74,135 @@ static void read_model(char *model, size_t len)
     fclose(f);
   }
   model[n] = 0;
-  for (char *p = model; *p; p++) {
-    if (*p == '"' || *p == '\\' || (unsigned char)*p < 0x20)
-      *p = ' ';
+  json_safe(model);
+}
+
+// What the board is, beyond its name: "BCM2837" from the device tree's
+// compatible list, the CPU's cores and design, its top clock, and the
+// memory the board was made with, from the revision code a Raspberry Pi's
+// firmware leaves in the device tree (MemTotal is that less what the GPU
+// and the kernel keep).
+typedef struct {
+  char soc[32];
+  int cores;
+  char cpu[32];
+  long max_mhz;
+  long ram_mb;
+} board_specs_t;
+
+static const char *cpu_part(unsigned part)
+{
+  switch (part) {
+  case 0xb76: return "ARM1176";
+  case 0xc07: return "Cortex-A7";
+  case 0xd03: return "Cortex-A53";
+  case 0xd04: return "Cortex-A35";
+  case 0xd05: return "Cortex-A55";
+  case 0xd07: return "Cortex-A57";
+  case 0xd08: return "Cortex-A72";
+  case 0xd0b: return "Cortex-A76";
+  default: return NULL;
   }
+}
+
+static void read_specs(board_specs_t *specs)
+{
+  char buf[512], line[128];
+  FILE *f;
+
+  memset(specs, 0, sizeof(*specs));
+
+  // "raspberrypi,model-zero-2-w\0brcm,bcm2837\0": the SoC is the brcm one.
+  if ((f = fopen("/proc/device-tree/compatible", "r"))) {
+    size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    buf[n] = 0;
+    for (size_t at = 0; at < n; at += strlen(buf + at) + 1) {
+      if (!strncmp(buf + at, "brcm,", 5)) {
+        snprintf(specs->soc, sizeof(specs->soc), "%s", buf + at + 5);
+        for (char *c = specs->soc; *c; c++)
+          *c = toupper((unsigned char)*c);
+      }
+    }
+  }
+
+  specs->cores = sysconf(_SC_NPROCESSORS_CONF);
+
+  if ((f = fopen("/proc/cpuinfo", "r"))) {
+    unsigned part;
+    while (fgets(line, sizeof(line), f) && !specs->cpu[0]) {
+      if (sscanf(line, "CPU part : %x", &part) == 1 && cpu_part(part))
+        snprintf(specs->cpu, sizeof(specs->cpu), "%s", cpu_part(part));
+    }
+    fclose(f);
+  }
+
+  if (read_line("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq", line, sizeof(line)))
+    specs->max_mhz = atol(line) / 1000;
+
+  // A new-style revision code, bit 23 set, has the memory in bits 20-22.
+  unsigned char rev[4];
+  if ((f = fopen("/proc/device-tree/system/linux,revision", "r"))) {
+    if (fread(rev, 1, 4, f) == 4) {
+      unsigned long code = (unsigned long)rev[0] << 24 | rev[1] << 16 | rev[2] << 8 | rev[3];
+      if (code & 0x800000)
+        specs->ram_mb = 256L << (code >> 20 & 7);
+    }
+    fclose(f);
+  }
+}
+
+// The sensor's maker, from how its driver is named.
+static const char *sensor_maker(const char *driver)
+{
+  static const struct { const char *prefix, *maker; } makers[] = {
+    { "imx", "Sony" }, { "ov", "OmniVision" }, { "ar0", "onsemi" }, { "mt9", "onsemi" },
+    { "gc", "GalaxyCore" }, { "s5k", "Samsung" }, { "hm", "Himax" }, { "arducam", "Arducam" },
+  };
+  for (size_t i = 0; i < sizeof(makers) / sizeof(makers[0]); i++) {
+    if (!strncmp(driver, makers[i].prefix, strlen(makers[i].prefix)))
+      return makers[i].maker;
+  }
+  return NULL;
+}
+
+// "Sony IMX219": the sensor a CSI camera's driver names in its subdevice,
+// "imx219 10-0010", or, for a USB camera, the name it gives itself.
+static void read_camera(char *camera, size_t len)
+{
+  DIR *dir = opendir("/sys/class/video4linux");
+  struct dirent *entry;
+  char path[300], name[128];
+
+  camera[0] = 0;
+  while (dir && (entry = readdir(dir)) && !camera[0]) {
+    if (strncmp(entry->d_name, "v4l-subdev", 10))
+      continue;
+    snprintf(path, sizeof(path), "/sys/class/video4linux/%s/name", entry->d_name);
+    if (!read_line(path, name, sizeof(name)))
+      continue;
+    name[strcspn(name, " ")] = 0;
+    const char *maker = sensor_maker(name);
+    if (!maker)
+      continue;
+    if (!strcmp(maker, "Arducam")) {
+      snprintf(camera, len, "%s", name);
+    } else {
+      for (char *c = name; *c; c++)
+        *c = toupper((unsigned char)*c);
+      snprintf(camera, len, "%s %s", maker, name);
+    }
+  }
+  if (dir)
+    closedir(dir);
+
+  // A USB camera: the device given, or the first.
+  const char *video = !strncmp(camera_options.path, "/dev/video", 10) ? camera_options.path + 5 : "video0";
+  snprintf(path, sizeof(path), "/sys/class/video4linux/%s/name", video);
+  if (!camera[0] && read_line(path, name, sizeof(name)) && strncmp(name, "unicam", 6)
+      && strncmp(name, "rp1-cfe", 7) && strncmp(name, "bcm2835", 7) && strncmp(name, "pispbe", 6))
+    snprintf(camera, len, "%s", name);
+  json_safe(camera);
 }
 
 // The firmware's throttled flags: bit 0 under-voltage, 1 clock capped,
@@ -160,16 +299,31 @@ static void read_memory(unsigned long *total_kb, unsigned long *available_kb)
 
 static void server_stats_sample(uint64_t now)
 {
-  static char model[128];
+  static char model[128], camera[128];
+  static board_specs_t specs;
   static bool model_read;
   char line[128], *p = server_stats, *end = server_stats + sizeof(server_stats);
 
   if (!model_read) {
     read_model(model, sizeof(model));
+    read_specs(&specs);
+    read_camera(camera, sizeof(camera));
     model_read = true;
   }
 
   p += snprintf(p, end - p, "{\"model\":\"%s\"", model);
+  p += snprintf(p, end - p, specs.soc[0] ? ",\"soc\":\"%s\"" : ",\"soc\":null", specs.soc);
+  p += snprintf(p, end - p, ",\"cpu_cores\":%d", specs.cores);
+  p += snprintf(p, end - p, specs.cpu[0] ? ",\"cpu\":\"%s\"" : ",\"cpu\":null", specs.cpu);
+  if (specs.max_mhz)
+    p += snprintf(p, end - p, ",\"cpu_max_mhz\":%ld", specs.max_mhz);
+  else
+    p += snprintf(p, end - p, ",\"cpu_max_mhz\":null");
+  if (specs.ram_mb)
+    p += snprintf(p, end - p, ",\"ram_mb\":%ld", specs.ram_mb);
+  else
+    p += snprintf(p, end - p, ",\"ram_mb\":null");
+  p += snprintf(p, end - p, camera[0] ? ",\"camera\":\"%s\"" : ",\"camera\":null", camera);
 
   long throttled = read_throttled();
   int undervoltage = throttled < 0 ? read_undervoltage() : -1;

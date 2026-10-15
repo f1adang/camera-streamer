@@ -41,16 +41,22 @@ wherever `/stream` does, through a proxy included; only camera-streamer has to r
 the controller. It relays the status reports as server-sent events on
 `http://<ip>:8080/fluidnc`:
 
-    data: {"viewers":2,"connected":true,"age":120,"status":"<Run|MPos:89.032,122.430,44.991|FS:494,0|SD:65.13,/sd/a.gcode>","wco":"-3.000,-14.000,46.000","ov":"100,100,100","error":"","server":{"model":"Raspberry Pi Zero 2 W Rev 1.0","throttled":0,"temp":52.1,…}}
+    data: {"viewers":2,"connected":true,"age":120,"status":"<Run|MPos:89.032,122.430,44.991|FS:494,0|SD:65.13,/sd/a.gcode>","wco":"-3.000,-14.000,46.000","ov":"100,100,100","board":"MKS DLC32 V2.1","firmware":"FluidNC v3.7.8","error":"","server":{"model":"Raspberry Pi Zero 2 W Rev 1.0","soc":"BCM2837","cpu_cores":4,"cpu":"Cortex-A53","cpu_max_mhz":1000,"ram_mb":512,"camera":"Sony IMX219","throttled":0,"temp":52.1,…}}
 
 `viewers` is the number of `/fluidnc` responses open, that is, of `/telemetry` pages being
 looked at (a hidden tab lets go), and is sent with or without a controller. `status` is the
 latest report as the controller sent it, and `wco` and `ov` the work offset and the overrides
 from the last report that carried them, since FluidNC sends those only every few reports.
+`board` and `firmware` are what the controller is, shown under its name: `$/board` from its
+config and the firmware from `$I`, asked once a connection, and again every thirty seconds
+the controller is idle until it has answered, since FluidNC refuses them during a job.
 `battery` and `mobile` are the Victron battery monitor and the Teltonika router below, or
 `null` without them. `server` is the health of the host camera-streamer runs on, shown in a
 box over the picture's top left corner (under the picture, when it is narrow) as "Brušocam
-server": the board's model from the device tree, the Raspberry Pi firmware's `throttled` flags
+server": the board's model from the device tree, its `soc`, `cpu_cores`, `cpu` (from the CPU
+part in `/proc/cpuinfo`), `cpu_max_mhz` and `ram_mb` (from the Raspberry Pi's revision code),
+the `camera`'s sensor ("Sony IMX219", from its V4L2 subdevice, or a USB camera's own name),
+the Raspberry Pi firmware's `throttled` flags
 (under-voltage, clock capped, throttled, soft temperature limit, now and since boot) or, on
 kernels without them, the `undervoltage` alarm, the CPU temperature and clock, the load,
 memory, the Wi-Fi signal in dBm, the bytes sent per second on every interface but the
@@ -72,9 +78,9 @@ Each viewer of `/telemetry` holds two HTTP connections, `/stream` and `/fluidnc`
 
 ### Victron battery monitor
 
-Under the picture, `/telemetry` can show a Victron battery monitor (a SmartShunt, a BMV, or
-one on a VE.Direct Bluetooth Smart dongle) as a panel titled after it, "Rande Stats" for
-`--victron-name=Rande`: the state of charge, voltage, current, power, Ah consumed, time to
+`/telemetry` can show a Victron battery monitor (a SmartShunt, a BMV, or one on a VE.Direct
+Bluetooth Smart dongle) in a box over the picture's bottom right corner (under the picture,
+when it is narrow), titled after it, "Rande Stats" for `--victron-name=Rande`: the state of charge, voltage, current, power, Ah consumed, time to
 go, the aux input (battery temperature, starter battery or midpoint), any alarm, and the
 Bluetooth signal. camera-streamer hears it over Bluetooth through Instant Readout, which the
 monitor puts, encrypted, into every advertisement: no connection or pairing, and the
@@ -84,7 +90,7 @@ readout details:
 
 - `--victron-mac=d4:12:34:56:78:9a` (the colons may be left out)
 - `--victron-key=<32 hex digits>`; it changes when the Bluetooth PIN is changed or reset
-- `--victron-name=Rande` to title the panel; "Battery" without it
+- `--victron-name=Rande` to title the box; "Battery" without it
 
 The key is on the command line, so anybody who can log in to the host can read it.
 
@@ -108,11 +114,13 @@ finds `libsystemd` and `libcrypto` (`libsystemd-dev` and `libssl-dev`).
 
 ### Teltonika router
 
-The same panel can show the mobile connection of a Teltonika router on RutOS 7, such as a
+The same box can show the mobile connection of a Teltonika router on RutOS 7, such as a
 TRB500: the operator (and whether it is roaming), the network (5G-NSA, LTE …, or not
 connected), the signal as RSRP, the SINR, the 5G cell's RSRP in 5G NSA, the band, the data
 received and sent since the modem connected, and the modem's temperature. Without a battery
-monitor the panel is "Mobile Stats".
+monitor the box is "Mobile Stats". Over its figures it names the router and its modem,
+"Teltonika TRB500 · Quectel RG501Q-EU", from `GET /api/system/device/status`, asked once,
+and the modem status; over the battery's, "Victron Energy" and the monitor's model.
 
 - `--teltonika-url=http://192.168.2.1` (plain HTTP; the router's WebUI must answer on it)
 - `--teltonika-user=admin`, the default
@@ -125,7 +133,7 @@ runs out, logging in again when it has or when the router has forgotten it. Afte
 a refused login included, it waits thirty seconds, so that a wrong password does not lock the
 user out. It is relayed with each `/fluidnc` event:
 
-    "mobile":{"age":3847,"error":"","modem":"Internal modem","operator":"Swisscom","conntype":"5G-NSA","ntype":"5G (NSA)","state":"Connected","netstate":"Registered, home","simstate":"Inserted","band":"LTE B3","rssi":-61,"rsrp":-95,"rsrq":-11,"sinr":11,"nr_rsrp":-101,"nr_sinr":6,"signal_quality":72,"temperature":47,"rxbytes":1839567890,"txbytes":414145678}
+    "mobile":{"age":3847,"error":"","modem":"Internal modem","modem_manufacturer":"Quectel","modem_model":"RG501Q-EU","router_model":"TRB500","operator":"Swisscom","conntype":"5G-NSA","ntype":"5G (NSA)","state":"Connected","netstate":"Registered, home","simstate":"Inserted","band":"LTE B3","rssi":-61,"rsrp":-95,"rsrq":-11,"sinr":11,"nr_rsrp":-101,"nr_sinr":6,"signal_quality":72,"temperature":47,"rxbytes":1839567890,"txbytes":414145678}
 
 The figures are the first modem that is online, as the router names them, made numbers where
 the router sends them as strings; `nr_rsrp` and `nr_sinr` are the 5G cell's, from its

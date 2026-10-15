@@ -3,8 +3,8 @@
 // signal, the band, the data and the modem's temperature.
 //
 // Read from the router's API, as its WebUI reads it: POST /api/login for a
-// token, then GET /api/modems/status with it, every five seconds while
-// somebody watches. The token lasts five minutes and is used until then, or
+// token, GET /api/system/device/status with it once for the router's model,
+// then GET /api/modems/status every five seconds while somebody watches. The token lasts five minutes and is used until then, or
 // until the router says it has run out. This host asks, not the browser,
 // which may be anywhere; the password stays here.
 //
@@ -49,6 +49,7 @@ static nlohmann::json teltonika_modem;
 static std::string teltonika_error;
 
 static std::string router_host, router_port;
+static nlohmann::json router_model;    // "TRB500", once the router has said
 
 static uint64_t now_ms()
 {
@@ -312,6 +313,8 @@ static bool teltonika_read_modem(const nlohmann::json &json, nlohmann::json &out
 
     out = {
       { "modem", text(m, "name") },
+      { "modem_manufacturer", text(m, "manufacturer") },
+      { "modem_model", text(m, "model") },
       { "operator", m.contains("operator") ? text(m, "operator") : text(m, "provider") },
       { "conntype", text(m, "conntype") },
       { "ntype", text(m, "ntype") },
@@ -345,6 +348,24 @@ static bool teltonika_read_modem(const nlohmann::json &json, nlohmann::json &out
 
   error = "The router's modem is offline";
   return false;
+}
+
+// The router's own model, from its static description, or its board's. A
+// user that may not read it does without.
+static void teltonika_read_model(const std::string &token)
+{
+  nlohmann::json json;
+  std::string error;
+  int status;
+
+  if (!teltonika_api("GET", "/system/device/status", token, "", status, json, error) || status != 200)
+    return;
+  const nlohmann::json &data = json.value("data", nlohmann::json::object());
+  if (data.contains("static") && data["static"].is_object())
+    router_model = text(data["static"], "model");
+  if (router_model.is_null() && data.contains("board") && data["board"].is_object()
+      && data["board"].contains("model") && data["board"]["model"].is_object())
+    router_model = text(data["board"]["model"], "name");
 }
 
 static bool teltonika_is_watched(uint64_t now)
@@ -398,6 +419,8 @@ static void *teltonika_thread(void *arg)
         teltonika_set_error(error);
         continue;
       }
+      if (router_model.is_null())
+        teltonika_read_model(token);
     }
 
     if (!teltonika_api("GET", "/modems/status", token, "", status, json, error)) {
@@ -426,6 +449,7 @@ static void *teltonika_thread(void *arg)
       continue;
     }
 
+    modem["router_model"] = router_model;
     pthread_mutex_lock(&teltonika_lock);
     teltonika_modem = modem;
     teltonika_heard_at = now_ms();
