@@ -391,17 +391,35 @@ static int victron_connect(sd_bus **bus)
 
 // Every advertisement, not only those that differ from the last, though
 // the monitor's all differ in the nonce, and only Bluetooth Low Energy.
-static int victron_start_scan(sd_bus *bus)
+static int victron_discover(sd_bus *bus, sd_bus_error *error)
 {
-  sd_bus_error error = SD_BUS_ERROR_NULL;
-
   int r = sd_bus_call_method(bus, "org.bluez", adapter_path, "org.bluez.Adapter1",
-    "SetDiscoveryFilter", &error, NULL, "a{sv}", 2,
+    "SetDiscoveryFilter", error, NULL, "a{sv}", 2,
     "Transport", "s", "le",
     "DuplicateData", "b", 1);
   if (r >= 0)
     r = sd_bus_call_method(bus, "org.bluez", adapter_path, "org.bluez.Adapter1",
-      "StartDiscovery", &error, NULL, "");
+      "StartDiscovery", error, NULL, "");
+  return r;
+}
+
+static int victron_start_scan(sd_bus *bus)
+{
+  sd_bus_error error = SD_BUS_ERROR_NULL;
+
+  int r = victron_discover(bus, &error);
+
+  // An adapter that is off is turned on. On a Raspberry Pi Zero 2 W,
+  // bluetoothd tries at boot before the chip is ready, "Failed to set
+  // mode", and leaves it off.
+  if (r < 0 && sd_bus_error_has_name(&error, "org.bluez.Error.NotReady")) {
+    LOG_INFO(NULL, "Victron: The Bluetooth adapter is off; turning it on.");
+    sd_bus_error_free(&error);
+    r = sd_bus_set_property(bus, "org.bluez", adapter_path, "org.bluez.Adapter1",
+      "Powered", &error, "b", 1);
+    if (r >= 0)
+      r = victron_discover(bus, &error);
+  }
 
   // What went wrong, in what to do about it, where it is known. BlueZ that
   // will not start - the bus waits 25 s for it - is most often no adapter
@@ -415,9 +433,10 @@ static int victron_start_scan(sd_bus *bus)
       ? "BlueZ is not running, as this host has no Bluetooth adapter hci0: Bluetooth may be "
         "turned off, with dtoverlay=disable-bt in /boot/firmware/config.txt"
       : "BlueZ is not running: see systemctl status bluetooth", 0, NULL);
-  else if (sd_bus_error_has_name(&error, "org.bluez.Error.NotReady"))
-    victron_bus_error("The Bluetooth adapter is off: rfkill unblock bluetooth, then "
-      "bluetoothctl power on", 0, NULL);
+  else if (sd_bus_error_has_names(&error, "org.bluez.Error.NotReady", "org.bluez.Error.Blocked",
+      "org.bluez.Error.Failed"))
+    victron_bus_error("The Bluetooth adapter is off, and would not turn on: see rfkill list, "
+      "and bluetoothctl power on", 0, NULL);
   else if (sd_bus_error_has_name(&error, "org.freedesktop.DBus.Error.UnknownObject"))
     victron_bus_error("BlueZ has no adapter hci0", 0, NULL);
   else
