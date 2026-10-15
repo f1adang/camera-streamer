@@ -1,10 +1,9 @@
-// A TP-Link LTE router's mobile connection - such as an Archer MR402-Outdoor
-// (AC1200 Wireless Dual Band 4G LTE Outdoor Router) - for the panel under
-// the picture on /telemetry: the operator, the network, the signal, the
-// band and the data.
+// A TP-Link router used as a Wi-Fi Access Point (such as an Archer
+// MR402-Outdoor) - for the panel on /telemetry: the Wi-Fi network (SSID),
+// the channels, the number of connected clients and their hostnames/IPs.
 //
 // Authenticates with the router's API using its ECC (secp224r1) key exchange
-// and AES-128-CBC encryption. Reads connection status and figures every five
+// and AES-128-CBC encryption. Reads AP status and connected clients every five
 // seconds while somebody watches. This host asks, not the browser; the
 // password stays here.
 //
@@ -57,11 +56,11 @@ static pthread_cond_t tplink_asked = PTHREAD_COND_INITIALIZER;
 static bool tplink_watched;
 static uint64_t tplink_asked_at;
 static uint64_t tplink_heard_at;    // 0 until the first answer
-static nlohmann::json tplink_modem;
+static nlohmann::json tplink_ap;
 static std::string tplink_error;
 
 static std::string router_host, router_port;
-static std::string router_model_name = "TP-Link AC1200 4G LTE Router";
+static std::string router_model_name = "TP-Link Archer MR402-Outdoor";
 
 static uint64_t now_ms()
 {
@@ -467,74 +466,6 @@ struct tplink_session {
   }
 };
 
-static std::string tplink_band_name(int code)
-{
-  switch (code) {
-  case 40: return "450 MHz";
-  case 41: return "480 MHz";
-  case 42: return "750 MHz";
-  case 43: return "850 MHz";
-  case 44: case 45: case 46: return "900 MHz";
-  case 47: return "1800 MHz";
-  case 48: return "1900 MHz";
-  case 80: case 120: return "B1";
-  case 81: case 121: return "B2";
-  case 82: case 122: return "B3";
-  case 83: case 123: return "B4";
-  case 84: case 124: return "B5";
-  case 85: case 125: return "B6";
-  case 86: case 126: return "B7";
-  case 87: case 127: return "B8";
-  case 88: case 128: return "B9";
-  case 129: return "B10";
-  case 90: case 130: return "B11";
-  case 91: case 131: return "B12";
-  case 132: return "B13";
-  case 133: return "B14";
-  case 134: return "B17";
-  case 143: return "B18";
-  case 144: return "B19";
-  case 145: return "B20";
-  case 146: return "B21";
-  case 152: return "B23";
-  case 147: return "B24";
-  case 148: return "B25";
-  case 153: return "B26";
-  case 158: return "B28";
-  case 159: return "B29";
-  case 160: return "B30";
-  case 154: return "B32";
-  case 135: return "B33";
-  case 136: return "B34";
-  case 137: return "B35";
-  case 138: return "B36";
-  case 139: return "B37";
-  case 140: return "B38";
-  case 141: return "B39";
-  case 142: return "B40";
-  case 149: return "B41";
-  case 150: return "B42";
-  case 151: return "B43";
-  default:
-    if (code > 0) return "B" + std::to_string(code);
-    return "";
-  }
-}
-
-static const char *network_type_name(int type)
-{
-  switch (type) {
-  case 1: return "2G (GSM)";
-  case 2: return "3G (WCDMA)";
-  case 3: return "4G LTE";
-  case 4: return "TD-SCDMA";
-  case 5: return "CDMA 1x";
-  case 6: return "CDMA 1x Ev-Do";
-  case 7: return "4G+ LTE";
-  default: return "Mobile";
-  }
-}
-
 static bool tplink_login(tplink_session &session, std::string &error)
 {
   std::string host_hdr = (router_host.find(':') != std::string::npos ? "[" + router_host + "]" : router_host)
@@ -548,7 +479,7 @@ static bool tplink_login(tplink_session &session, std::string &error)
 
   auto parm = nlohmann::json::parse(ans1.body, nullptr, false);
   if (parm.is_discarded() || !parm.contains("eccPubKey_X_HEX") || !parm.contains("eccPubKey_Y_HEX") || !parm.contains("seq")) {
-    error = "The router did not answer with its public key; is it a TP-Link LTE router?";
+    error = "The router did not answer with its public key; is it a TP-Link router?";
     return false;
   }
 
@@ -605,21 +536,25 @@ static bool tplink_login(tplink_session &session, std::string &error)
 }
 
 // Parses key-value blocks like "[stack]index\nkey=val\n..."
-static bool tplink_read_modem(tplink_session &session, nlohmann::json &out, std::string &error)
+static bool tplink_read_ap(tplink_session &session, nlohmann::json &out, std::string &error)
 {
   std::string host_hdr = (router_host.find(':') != std::string::npos ? "[" + router_host + "]" : router_host)
     + (router_port != "80" ? ":" + router_port : "");
 
-  std::vector<std::string> oids = {
-    "WAN_LTE_LINK_CFG",
-    "LTE_NET_STATUS",
-    "LTE_PROF_STAT",
-    "WAN_LTE_INTF_CFG"
+  std::vector<std::pair<std::string, std::string>> oids = {
+    {"IGD_DEV_INFO", "1"},
+    {"LAN_WLAN", "5"},
+    {"LAN_WLAN_ASSOC_DEV", "5"},
+    {"LAN_HOST_ENTRY", "5"}
   };
-  std::string q_header = "5&5&5&5";
+  std::string q_header;
+  for (size_t i = 0; i < oids.size(); ++i) {
+    if (i > 0) q_header += "&";
+    q_header += oids[i].second;
+  }
   std::string q_data = q_header + "\r\n";
   for (size_t i = 0; i < oids.size(); ++i) {
-    q_data += "[" + oids[i] + "#0,0,0,0,0,0#0,0,0,0,0,0]" + std::to_string(i) + ",0\r\n";
+    q_data += "[" + oids[i].first + "#0,0,0,0,0,0#0,0,0,0,0,0]" + std::to_string(i) + ",0\r\n";
   }
 
   auto q_enc = session.aes_encrypt_with_sign(q_data, false);
@@ -675,110 +610,142 @@ static bool tplink_read_modem(tplink_session &session, nlohmann::json &out, std:
     at = eol + 1;
   }
 
-  // Find the active stack (the one with connectStatus=1 or connStat=1)
-  std::string active_stack = "2,1,0,0,0,0"; // default LTE stack on Archer
+  // 1. Hosts from LAN_HOST_ENTRY (index 3)
+  struct host_entry {
+    std::string ip;
+    std::string name;
+  };
+  std::map<std::string, host_entry> hosts;
+  if (blocks.count(3)) {
+    for (const auto &st : blocks[3]) {
+      const auto &kvs = st.second;
+      auto mac_it = kvs.find("MACAddress");
+      if (mac_it != kvs.end() && !mac_it->second.empty()) {
+        std::string mac = mac_it->second;
+        for (char &c : mac) c = toupper((unsigned char)c);
+        host_entry h;
+        auto ip_it = kvs.find("IPAddress");
+        if (ip_it != kvs.end()) h.ip = ip_it->second;
+        auto name_it = kvs.find("hostName");
+        if (name_it != kvs.end() && !name_it->second.empty() && name_it->second != "Unknown") {
+          h.name = name_it->second;
+        }
+        hosts[mac] = h;
+      }
+    }
+  }
+
+  // 2. Wi-Fi Radios from LAN_WLAN (index 1)
+  std::string ssid_2g, ssid_5g;
+  int channel_2g = 0, channel_5g = 0;
+  int assoc_2g = 0, assoc_5g = 0;
+  if (blocks.count(1)) {
+    for (const auto &st : blocks[1]) {
+      const auto &kvs = st.second;
+      auto band_it = kvs.find("X_TP_Band");
+      std::string band = band_it != kvs.end() ? band_it->second : "";
+      auto ssid_it = kvs.find("SSID");
+      std::string ssid = ssid_it != kvs.end() ? ssid_it->second : "";
+      auto ch_it = kvs.find("channel");
+      int ch = ch_it != kvs.end() ? atoi(ch_it->second.c_str()) : 0;
+      auto assoc_it = kvs.find("totalAssociations");
+      int assoc = assoc_it != kvs.end() ? atoi(assoc_it->second.c_str()) : 0;
+
+      if (band.find("5G") != std::string::npos) {
+        ssid_5g = ssid;
+        channel_5g = ch;
+        assoc_5g = assoc;
+      } else {
+        ssid_2g = ssid;
+        channel_2g = ch;
+        assoc_2g = assoc;
+      }
+    }
+  }
+
+  // 3. Connected Wi-Fi Stations from LAN_WLAN_ASSOC_DEV (index 2)
+  nlohmann::json clients_json = nlohmann::json::array();
+  int count_2g = 0, count_5g = 0;
+  if (blocks.count(2)) {
+    for (const auto &st : blocks[2]) {
+      const auto &kvs = st.second;
+      auto mac_it = kvs.find("associatedDeviceMACAddress");
+      if (mac_it == kvs.end() || mac_it->second.empty()) continue;
+      std::string mac = mac_it->second;
+      for (char &c : mac) c = toupper((unsigned char)c);
+
+      auto if_it = kvs.find("X_TP_HostName");
+      std::string ifname = if_it != kvs.end() ? if_it->second : "";
+      std::string band = (ifname == "wlan5") ? "5GHz" : "2.4GHz";
+      if (band == "5GHz") count_5g++; else count_2g++;
+
+      auto sent_it = kvs.find("X_TP_TotalPacketsSent");
+      uint64_t sent = sent_it != kvs.end() ? strtoull(sent_it->second.c_str(), NULL, 10) : 0;
+      auto recv_it = kvs.find("X_TP_TotalPacketsReceived");
+      uint64_t recv = recv_it != kvs.end() ? strtoull(recv_it->second.c_str(), NULL, 10) : 0;
+
+      std::string ip;
+      std::string name;
+      auto h_it = hosts.find(mac);
+      if (h_it != hosts.end()) {
+        ip = h_it->second.ip;
+        name = h_it->second.name;
+      }
+
+      nlohmann::json client = {
+        {"mac", mac},
+        {"ip", ip.empty() ? nlohmann::json(nullptr) : nlohmann::json(ip)},
+        {"name", name.empty() ? nlohmann::json(nullptr) : nlohmann::json(name)},
+        {"band", band},
+        {"packets_sent", sent},
+        {"packets_recv", recv}
+      };
+      clients_json.push_back(client);
+    }
+  }
+
+  // 4. Device info from IGD_DEV_INFO (index 0)
+  std::string model = router_model_name;
+  std::string desc;
+  uint64_t uptime = 0;
   if (blocks.count(0)) {
-    for (const auto &it : blocks[0]) {
-      const auto &m = it.second;
-      auto cs = m.find("connectStatus");
-      if (cs != m.end() && cs->second == "1") {
-        active_stack = it.first;
-        break;
+    for (const auto &st : blocks[0]) {
+      const auto &kvs = st.second;
+      auto m_it = kvs.find("modelName");
+      if (m_it != kvs.end() && !m_it->second.empty()) {
+        model = "TP-Link " + m_it->second;
+        router_model_name = model;
       }
+      auto d_it = kvs.find("description");
+      if (d_it != kvs.end() && !d_it->second.empty()) desc = d_it->second;
+      auto u_it = kvs.find("upTime");
+      if (u_it != kvs.end() && !u_it->second.empty()) uptime = strtoull(u_it->second.c_str(), NULL, 10);
     }
   }
 
-  // Extract fields
-  const auto &link_cfg = blocks[0][active_stack];
-  const auto &net_stat = blocks[1][active_stack];
-  const auto &prof_stat = blocks[2][active_stack];
-  // INTF_CFG may have a 0 in 2nd position, e.g. "2,0,0,0,0,0"
-  std::string intf_stack = active_stack;
-  if (!blocks[3].count(intf_stack) && active_stack.size() >= 3) {
-    intf_stack[2] = '0';
+  std::string combined_ssid;
+  if (ssid_2g == ssid_5g) combined_ssid = ssid_2g;
+  else if (!ssid_2g.empty() && !ssid_5g.empty()) combined_ssid = ssid_2g + " / " + ssid_5g;
+  else combined_ssid = !ssid_2g.empty() ? ssid_2g : ssid_5g;
+
+  int total_clients = (int)clients_json.size();
+  if (total_clients == 0 && (assoc_2g > 0 || assoc_5g > 0)) {
+    total_clients = assoc_2g + assoc_5g;
+    count_2g = assoc_2g;
+    count_5g = assoc_5g;
   }
-  const auto &intf_cfg = blocks[3][intf_stack];
-
-  int conn_status = link_cfg.count("connectStatus") ? atoi(link_cfg.at("connectStatus").c_str()) : 0;
-  int net_type = link_cfg.count("networkType") ? atoi(link_cfg.at("networkType").c_str()) : 3;
-  int roaming = link_cfg.count("roamingStatus") ? atoi(link_cfg.at("roamingStatus").c_str()) : 0;
-
-  std::string op;
-  if (prof_stat.count("ispName") && !prof_stat.at("ispName").empty())
-    op = prof_stat.at("ispName");
-  else if (prof_stat.count("spn") && !prof_stat.at("spn").empty())
-    op = prof_stat.at("spn");
-
-  std::string band_str;
-  if (net_stat.count("rfInfoBand")) {
-    int raw_band = atoi(net_stat.at("rfInfoBand").c_str());
-    int b1 = raw_band & 0xff;
-    int b2 = (raw_band >> 8) & 0xff;
-    band_str = tplink_band_name(b1);
-    if (b2 != 0) {
-      std::string s2 = tplink_band_name(b2);
-      if (!s2.empty()) {
-        if (!band_str.empty()) band_str += ", ";
-        band_str += s2;
-      }
-    }
-  }
-
-  nlohmann::json rsrp_val = nullptr;
-  if (net_stat.count("rfInfoRsrp")) {
-    int v = atoi(net_stat.at("rfInfoRsrp").c_str());
-    if (v != 0) rsrp_val = v;
-  }
-
-  nlohmann::json rsrq_val = nullptr;
-  if (net_stat.count("rfInfoRsrq")) {
-    int v = atoi(net_stat.at("rfInfoRsrq").c_str());
-    if (v != 0) rsrq_val = v;
-  }
-
-  nlohmann::json sinr_val = nullptr;
-  if (net_stat.count("rfInfoSnr")) {
-    int v = atoi(net_stat.at("rfInfoSnr").c_str());
-    sinr_val = v / 10.0;
-  }
-
-  nlohmann::json rssi_val = nullptr;
-  if (rsrp_val.is_null() && net_stat.count("rfInfoRssi")) {
-    int v = atoi(net_stat.at("rfInfoRssi").c_str());
-    if (v != 0) rssi_val = v;
-  }
-
-  nlohmann::json total_bytes = nullptr;
-  if (intf_cfg.count("totalStatistics")) {
-    double bytes = strtod(intf_cfg.at("totalStatistics").c_str(), NULL);
-    if (bytes > 0) total_bytes = bytes;
-  }
-
-  std::string net_name = network_type_name(net_type);
 
   out = {
-    { "router_model", router_model_name },
-    { "modem", net_name },
-    { "modem_manufacturer", "TP-Link" },
-    { "modem_model", router_model_name.find("Archer") != std::string::npos ?
-        router_model_name.substr(router_model_name.find("Archer")) : "Archer MR402-Outdoor" },
-    { "operator", op.empty() ? nlohmann::json(nullptr) : nlohmann::json(op) },
-    { "conntype", net_name },
-    { "ntype", net_name },
-    { "state", conn_status == 1 ? "Connected" : "Not connected" },
-    { "netstate", roaming ? "Roaming" : "Connected" },
-    { "simstate", "Ready" },
-    { "band", band_str.empty() ? nlohmann::json(nullptr) : nlohmann::json(band_str) },
-    { "rssi", rssi_val },
-    { "rsrp", rsrp_val },
-    { "rsrq", rsrq_val },
-    { "sinr", sinr_val },
-    { "signal_quality", nullptr },
-    { "temperature", nullptr },
-    { "rxbytes", total_bytes },
-    { "txbytes", nullptr },
-    { "nr_rsrp", nullptr },
-    { "nr_sinr", nullptr },
+    {"model", model},
+    {"description", desc.empty() ? nlohmann::json(nullptr) : nlohmann::json(desc)},
+    {"ssid", combined_ssid.empty() ? nlohmann::json(nullptr) : nlohmann::json(combined_ssid)},
+    {"channel_2g", channel_2g ? nlohmann::json(channel_2g) : nlohmann::json(nullptr)},
+    {"channel_5g", channel_5g ? nlohmann::json(channel_5g) : nlohmann::json(nullptr)},
+    {"clients_count", total_clients},
+    {"clients_2g", count_2g},
+    {"clients_5g", count_5g},
+    {"uptime", uptime ? nlohmann::json(uptime) : nlohmann::json(nullptr)},
+    {"clients", clients_json}
   };
 
   return true;
@@ -824,7 +791,7 @@ static void *tplink_thread(void *arg)
     delay_ms = TPLINK_RETRY_MS;
 
     std::string error;
-    nlohmann::json modem;
+    nlohmann::json ap;
 
     if (session.token.empty()) {
       if (!tplink_login(session, error)) {
@@ -833,7 +800,7 @@ static void *tplink_thread(void *arg)
       }
     }
 
-    if (!tplink_read_modem(session, modem, error)) {
+    if (!tplink_read_ap(session, ap, error)) {
       // If query failed with unauthorized/expired token, retry login immediately
       session.token.clear();
       session.cookie.clear();
@@ -842,7 +809,7 @@ static void *tplink_thread(void *arg)
     }
 
     pthread_mutex_lock(&tplink_lock);
-    tplink_modem = modem;
+    tplink_ap = ap;
     tplink_heard_at = now_ms();
     tplink_error.clear();
     pthread_mutex_unlock(&tplink_lock);
@@ -876,7 +843,7 @@ extern "C" void tplink_json(FILE *stream)
   tplink_watched = true;
   tplink_asked_at = now;
   pthread_cond_broadcast(&tplink_asked);
-  nlohmann::json out = tplink_heard_at ? tplink_modem : nlohmann::json::object();
+  nlohmann::json out = tplink_heard_at ? tplink_ap : nlohmann::json::object();
   out["age"] = tplink_heard_at ? nlohmann::json(now - tplink_heard_at) : nlohmann::json(nullptr);
   out["error"] = tplink_error;
   pthread_mutex_unlock(&tplink_lock);

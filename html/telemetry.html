@@ -240,6 +240,19 @@ main { width: 100%; max-width: 1400px; margin: 0 auto; padding: 18px 16px 28px; 
 .watch-note.bad { color: var(--bad); }
 .watch-note:empty { display: none; }
 .watch-bar.bad i { background: var(--bad); }
+.watch-clients {
+  display: flex; flex-wrap: wrap; gap: .25em .5em;
+  margin-top: .35em; font-size: .72em; max-width: 44em;
+}
+.watch-client {
+  display: inline-block;
+  padding: .1em .4em;
+  background: var(--sunk);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  color: var(--ink);
+  white-space: nowrap;
+}
 @container (max-width: 960px) {
   .watch-stats-wide { grid-template-columns: auto auto; }
 }
@@ -744,6 +757,18 @@ button:hover { border-color: var(--ink-dim); }
         </dl>
         <p class="watch-note" id="mob-note"></p>
       </div>
+      <div class="watch-group" id="ap-group" hidden>
+        <p class="watch-model" id="ap-model"></p>
+        <dl class="watch-stats watch-stats-wide" id="ap-stats">
+          <div id="ap-ssid-row"><dt data-t>Wi-Fi network</dt><dd id="ap-ssid"></dd></div>
+          <div id="ap-channels-row"><dt data-t>Channels</dt><dd id="ap-channels"></dd></div>
+          <div id="ap-clients-row"><dt data-t>Wi-Fi clients</dt><dd id="ap-clients"></dd></div>
+          <div id="ap-uptime-row"><dt data-t>Uptime</dt><dd id="ap-uptime"></dd></div>
+          <div id="ap-age-row"><dt data-t>Last heard</dt><dd id="ap-age"></dd></div>
+        </dl>
+        <div class="watch-clients" id="ap-devices" hidden></div>
+        <p class="watch-note" id="ap-note"></p>
+      </div>
     </div>
     <div class="watch-glass" aria-hidden="true"></div>
     <button type="button" class="watch-full" id="watch-full" hidden data-t>Full screen</button>
@@ -897,6 +922,13 @@ const DE = {
   "Roaming on": "Roaming bei",
   "{db} dB": "{db} dB",
   "Asking the router…": "Frage den Router …",
+  "Wi-Fi network": "WLAN-Netz",
+  "Channels": "Kanäle",
+  "Wi-Fi clients": "WLAN-Clients",
+  "Access Point": "Access Point",
+  "{n} connected": "{n} verbunden",
+  "{n} connected ({n2g} on 2.4 GHz, {n5g} on 5 GHz)": "{n} verbunden ({n2g} auf 2,4 GHz, {n5g} auf 5 GHz)",
+  "Asking the access point…": "Frage den Access Point …",
   "Voltage": "Spannung",
   "Current": "Strom",
   "Power": "Leistung",
@@ -1323,35 +1355,20 @@ const CLOCKS = {
     return (v < 0 ? "\u2212" : "+") + s;
   }
 
-  /* The place the machine is: its battery, and the mobile connection it is
-     on, either or both, under the battery's name. */
-  function showSite(battery, mobile) {
+  /* The place the machine is: its battery, mobile connection, and Wi-Fi
+     access point, under the battery's name or site. */
+  function showSite(battery, mobile, ap) {
     $("site").hidden = false;
-    say($("site-name"), "{name} Stats", { name: battery ? battery.name : "Mobile" });
+    const siteTitle = battery ? battery.name : (mobile && ap ? "Site" : (mobile ? "Mobile" : "Access Point"));
+    say($("site-name"), "{name} Stats", { name: siteTitle });
     $("bat-group").hidden = !battery;
     if (battery) showBattery(battery);
 
-    const mobiles = Array.isArray(mobile) ? mobile.filter(Boolean) : (mobile ? [mobile] : []);
-    $("mob-group").hidden = mobiles.length === 0;
-    if (mobiles.length > 0) {
-      showMobile(mobiles[0]);
-    }
+    $("mob-group").hidden = !mobile;
+    if (mobile) showMobile(mobile);
 
-    let mob2 = $("mob-group-2");
-    if (mobiles.length > 1) {
-      if (!mob2) {
-        mob2 = $("mob-group").cloneNode(true);
-        mob2.id = "mob-group-2";
-        for (const el of mob2.querySelectorAll("[id]")) {
-          el.id += "-2";
-        }
-        $("mob-group").parentNode.appendChild(mob2);
-      }
-      mob2.hidden = false;
-      showMobile(mobiles[1], "-2");
-    } else if (mob2) {
-      mob2.hidden = true;
-    }
+    $("ap-group").hidden = !ap;
+    if (ap) showAP(ap);
   }
 
   /* What each device is, by its maker and its model. */
@@ -1440,22 +1457,21 @@ const CLOCKS = {
       { dbm: String(Math.round(dbm)).replace("-", "\u2212") }, dbm < fair ? "warn" : ""];
   }
 
-  function showMobile(m, suffix = "") {
-    const mobileRow = (id, ...rest) => statRow(`mob-${id}${suffix}`, ...rest);
+  function showMobile(m) {
     const heard = typeof m.age === "number";
     const v = heard ? m : {};
 
-    // Teltonika TRB500 · Quectel RG501Q-EU / TP-Link Archer MR402-Outdoor: the router, and its modem.
+    // Teltonika TRB500 · Quectel RG501Q-EU: the router, and its modem.
     const router = v.router_model && (/^(teltonika|tp-link)/i.test(v.router_model) ? v.router_model : `Teltonika ${v.router_model}`);
     const modem = [v.modem_manufacturer, v.modem_model].filter(Boolean).join(" ");
-    $(`mob-model${suffix}`).textContent = (modem && modem !== router && router && !router.includes(modem))
+    $("mob-model").textContent = (modem && modem !== router && router && !router.includes(modem))
       ? [router, modem].filter(Boolean).join(" · ")
       : (router || modem);
 
     // Swisscom, or roaming on it, which the label says; 5G-NSA, or Not
     // connected.
     const roaming = v.netstate === "Roaming";
-    say($(`mob-operator-label${suffix}`), roaming ? "Roaming on" : "Operator");
+    say($("mob-operator-label"), roaming ? "Roaming on" : "Operator");
     mobileRow("operator", v.operator, String(v.operator), null, roaming ? "warn" : "");
     if (v.state && v.state !== "Connected") mobileRow("network", v.state, "Not connected", null, "bad");
     else mobileRow("network", v.conntype || v.ntype, String(v.conntype || v.ntype));
@@ -1468,7 +1484,7 @@ const CLOCKS = {
     else mobileRow("nr", null);
     mobileRow("band", v.band, String(v.band));
     // Since the modem connected.
-    const rxRow = $(`mob-rx-row${suffix}`);
+    const rxRow = $("mob-rx-row");
     if (rxRow) say(rxRow.querySelector("dt"), v.txbytes === null && typeof v.rxbytes === "number" ? "Data used" : "Received");
     mobileRow("rx", v.rxbytes, typeof v.rxbytes === "number" ? bytesOf(v.rxbytes) : "");
     mobileRow("tx", v.txbytes, typeof v.txbytes === "number" ? bytesOf(v.txbytes) : "");
@@ -1481,18 +1497,95 @@ const CLOCKS = {
       : ["{h} h ago", { h: Math.round(age / 3600000) }];
     mobileRow("age", age, ...late, age >= 300000 ? "bad" : "warn");
 
-    const note = $(`mob-note${suffix}`);
+    const note = $("mob-note");
     if (m.error) say(note, m.error + ".");
     else if (!heard) say(note, "Asking the router…");
     else say(note, "");
     note.classList.toggle("bad", !!m.error);
   }
 
+  /* ---- the access point and Wi-Fi clients ---- */
+  const apRow = (id, ...rest) => statRow(`ap-${id}`, ...rest);
+  const AP_LATE_MS = 15000;
+
+  function showAP(a) {
+    const heard = typeof a.age === "number";
+    const v = heard ? a : {};
+
+    // TP-Link Archer MR402-Outdoor
+    $("ap-model").textContent = v.model || "TP-Link Access Point";
+
+    apRow("ssid", v.ssid, String(v.ssid));
+
+    let channels = null;
+    if (v.channel_2g && v.channel_5g) {
+      channels = `ch ${v.channel_2g} \u00b7 ch ${v.channel_5g}`;
+    } else if (v.channel_2g) {
+      channels = `ch ${v.channel_2g}`;
+    } else if (v.channel_5g) {
+      channels = `ch ${v.channel_5g}`;
+    }
+    apRow("channels", channels, String(channels));
+
+    if (typeof v.clients_count === "number") {
+      if (v.clients_count > 0 && (v.clients_2g > 0 || v.clients_5g > 0)) {
+        apRow("clients", v.clients_count, "{n} connected ({n2g} on 2.4 GHz, {n5g} on 5 GHz)",
+          { n: v.clients_count, n2g: v.clients_2g, n5g: v.clients_5g });
+      } else {
+        apRow("clients", v.clients_count, "{n} connected", { n: v.clients_count });
+      }
+    } else {
+      apRow("clients", null);
+    }
+
+    if (typeof v.uptime === "number") apRow("uptime", v.uptime, ...uptimeOf(v.uptime));
+    else apRow("uptime", null);
+
+    const devBox = $("ap-devices");
+    if (devBox) {
+      if (Array.isArray(v.clients) && v.clients.length > 0) {
+        devBox.hidden = false;
+        devBox.textContent = "";
+        for (const c of v.clients) {
+          const span = document.createElement("span");
+          span.className = "watch-client";
+          const name = c.name || c.ip || c.mac;
+          const sub = c.band ? ` (${c.band})` : "";
+          span.textContent = name + sub;
+          const details = [
+            c.name ? `Host: ${c.name}` : null,
+            c.ip ? `IP: ${c.ip}` : null,
+            c.mac ? `MAC: ${c.mac}` : null,
+            c.band ? `Band: ${c.band}` : null,
+            (c.packets_sent || c.packets_recv) ? `${c.packets_recv || 0} pkts rx \u00b7 ${c.packets_sent || 0} pkts tx` : null
+          ].filter(Boolean).join(" \u00b7 ");
+          span.title = details;
+          devBox.appendChild(span);
+        }
+      } else {
+        devBox.hidden = true;
+        devBox.textContent = "";
+      }
+    }
+
+    const age = heard && a.age >= AP_LATE_MS ? a.age : null;
+    const late = age === null ? [] : age < 60000 ? ["{n} s ago", { n: Math.round(age / 1000) }]
+      : age < 3600000 ? ["{m} min ago", { m: Math.round(age / 60000) }]
+      : ["{h} h ago", { h: Math.round(age / 3600000) }];
+    apRow("age", age, ...late, age >= 300000 ? "bad" : "warn");
+
+    const note = $("ap-note");
+    if (a.error) say(note, a.error + ".");
+    else if (!heard) say(note, "Asking the access point…");
+    else say(note, "");
+    note.classList.toggle("bad", !!a.error);
+  }
+
   function onEvent(ev) {
     eventAt = Date.now();
     let d;
     try { d = JSON.parse(ev.data); } catch (e) { return; }
-    if (d.battery || d.mobile) showSite(d.battery, d.mobile);
+    if (d.battery || d.mobile || d.ap) showSite(d.battery, d.mobile, d.ap);
     if (d.server) showServer(d.server);
     if (typeof d.viewers === "number") {
       say(show.viewers, d.viewers === 1 ? "{n} viewer" : "{n} viewers", { n: d.viewers });

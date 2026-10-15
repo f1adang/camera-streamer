@@ -153,21 +153,22 @@ The figures are the first modem that is online, as the router names them, made n
 the router sends them as strings; `nr_rsrp` and `nr_sinr` are the 5G cell's, from its
 `cell_info`. `age` and `error` are as for the battery.
 
-### TP-Link LTE router
+### TP-Link Wi-Fi Access Point
 
-The box can also show the mobile connection of a TP-Link 4G/5G LTE router, such as the
-Archer MR402-Outdoor (AC1200 Wireless Dual Band 4G LTE Outdoor Router): the operator, the
-network (4G LTE, 4G+ LTE …), the signal as RSRP, the SINR, the LTE band (B20, B3 …) and the total
-data used. Over its figures it names the router ("TP-Link Archer MR402-Outdoor"):
+The box can also show the Wi-Fi access point and connected client stats of a TP-Link router, such as the
+Archer MR402-Outdoor (AC1200 Wireless Dual Band 4G LTE Outdoor Router) used as an AP: the Wi-Fi network (SSID),
+the 2.4 GHz and 5 GHz channels, the number of connected clients (with breakdown by band), router uptime, and the list of
+connected client devices (names, IPs, MAC addresses, bands and packet counters):
 
 - `--tplink-url=http://192.168.1.1` (plain HTTP; the router's WebUI must answer on it)
 - `--tplink-user=admin`, the default
 - `--tplink-password=<password>`
 
 camera-streamer authenticates using the router's encrypted API (secp224r1 ECC key exchange and
-AES-128-CBC encryption) and queries LTE status every five seconds while somebody watches, logging
-in again when the session expires. If both a Teltonika and a TP-Link router are configured,
-`mobile` in `/fluidnc` is an array of both routers, and `/telemetry` displays a panel for each.
+AES-128-CBC encryption) and queries AP status and connected clients every five seconds while somebody watches, logging
+in again when the session expires. It is relayed as `ap` with each `/fluidnc` event:
+
+    "ap":{"model":"TP-Link Archer MR402-Outdoor","description":"AC1200 Wireless Dual Band 4G LTE Outdoor Router","ssid":"RandeLab","channel_2g":1,"channel_5g":36,"clients_count":7,"clients_2g":3,"clients_5g":4,"uptime":432000,"clients":[{"mac":"AA:BB:CC:DD:EE:FF","ip":"192.168.1.100","name":"Pixel-9a","band":"5GHz","packets_sent":1234,"packets_recv":5678}],"age":1240,"error":""}
 
 ## RTSP server
 
