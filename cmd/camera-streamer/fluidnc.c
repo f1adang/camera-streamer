@@ -23,7 +23,11 @@
 #include "cmd/camera-streamer/fluidnc.h"
 #include "cmd/camera-streamer/server_stats.h"
 #include "cmd/camera-streamer/teltonika.h"
+#include "cmd/camera-streamer/tplink.h"
 #include "cmd/camera-streamer/victron.h"
+
+extern teltonika_options_t teltonika_options;
+extern tplink_options_t tplink_options;
 #include "util/http/http.h"
 #include "util/opts/log.h"
 
@@ -686,7 +690,17 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
     fputs(",\"battery\":", stream);
     victron_json(stream);
     fputs(",\"mobile\":", stream);
-    teltonika_json(stream);
+    if (teltonika_options.url[0] && tplink_options.url[0]) {
+      fputc('[', stream);
+      teltonika_json(stream);
+      fputc(',', stream);
+      tplink_json(stream);
+      fputc(']', stream);
+    } else if (tplink_options.url[0]) {
+      tplink_json(stream);
+    } else {
+      teltonika_json(stream);
+    }
     fputs("}\n\n", stream);
     bool gone = fflush(stream) || ferror(stream);
 
