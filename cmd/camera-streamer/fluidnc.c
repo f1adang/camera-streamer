@@ -18,6 +18,7 @@
 
 #include "cmd/camera-streamer/fluidnc.h"
 #include "cmd/camera-streamer/server_stats.h"
+#include "cmd/camera-streamer/teltonika.h"
 #include "cmd/camera-streamer/victron.h"
 #include "util/http/http.h"
 #include "util/opts/log.h"
@@ -642,6 +643,8 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
     server_stats_json(stream);
     fputs(",\"battery\":", stream);
     victron_json(stream);
+    fputs(",\"mobile\":", stream);
+    teltonika_json(stream);
     fputs("}\n\n", stream);
     bool gone = fflush(stream) || ferror(stream);
 

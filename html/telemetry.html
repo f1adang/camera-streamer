@@ -216,6 +216,20 @@ main { width: 100%; max-width: 1400px; margin: 0 auto; padding: 18px 16px 28px; 
 .watch-bar { height: .4em; margin-top: .3em; background: var(--line-soft); border-radius: 2px; overflow: hidden; }
 .watch-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
 .watch-ascii { display: none; white-space: pre; }
+/* The server the picture comes from, over its top left corner as the
+   machine is over the bottom left: a smaller box, a figure a line. */
+.watch-overlay.watch-server { top: 12px; bottom: auto; }
+.watch-model { margin: 0; font-size: .7em; color: var(--ink-dim); }
+.watch-model:empty { display: none; }
+.watch-stats {
+  display: grid; grid-template-columns: auto auto; align-items: baseline;
+  gap: 0 1em; margin: .2em 0 0; font-size: .78em;
+}
+.watch-stats div { display: contents; }
+.watch-stats dt { color: var(--ink-dim); }
+.watch-stats dd { margin: 0; text-align: right; }
+.watch-stats .bad { color: var(--bad); }
+.watch-stats .warn { color: var(--warn); }
 
 button {
   font: inherit; font-size: 13px; cursor: pointer; padding: 5px 11px; border-radius: 6px;
@@ -226,10 +240,11 @@ button:hover { border-color: var(--ink-dim); }
 .watch:fullscreen .watch-full { display: none; }
 
 .note { margin: 12px 0 0; min-height: 1.5em; font-size: 14px; color: var(--on-ground); opacity: .85; }
+.note:empty { display: none; }
 
-/* The battery and the server the picture comes from: under it, as wide as
-   it (the same rule, from the same --aspect), panels of figures rather than
-   a box over the picture. */
+/* Where the machine is, its battery and mobile connection: under the
+   picture, as wide as it (the same rule, from the same --aspect), a panel of
+   figures rather than a box over the picture. */
 .panel {
   max-width: max(320px, calc((100vh - 170px) * var(--aspect, 1.7778)));
   margin: 18px auto 0; padding: 14px 16px;
@@ -254,6 +269,7 @@ button:hover { border-color: var(--ink-dim); }
 .panel-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
 .panel-bar.bad i { background: var(--bad); }
 .panel-ascii { display: none; white-space: pre; }
+.panel-group { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 
 @media (max-width: 760px) {
   .watch-full { right: 6px; top: 6px; }
@@ -275,6 +291,9 @@ button:hover { border-color: var(--ink-dim); }
   :root[data-theme="kongress"] .watch > .watch-overlay { font-size: 14px; border-top: 2px solid #000; }
   .watch-pos { gap: .8em; }
   .watch-pos dd { min-width: 6ch; font-size: 1.25em; }
+  /* Under the picture there is the room for two figures a line. */
+  .watch-stats { grid-template-columns: auto 1fr auto 1fr; }
+  .watch-stats dd { text-align: left; }
 }
 
 /* ----------------------------------------------------------------- coconut */
@@ -454,9 +473,13 @@ button:hover { border-color: var(--ink-dim); }
   font-size: 24px; font-weight: 400; color: var(--phosphor); text-shadow: 0 0 4px rgba(51,255,51,.55);
 }
 /* An error is reverse video in the hot green, a warning underlined. */
-:root[data-theme="h4xx0r"] .panel-stats .bad {
+:root[data-theme="h4xx0r"] .panel-stats .bad,
+:root[data-theme="h4xx0r"] .watch-stats .bad {
   display: inline-block; padding: 0 .25em; background: var(--hot); color: var(--on-green); text-shadow: none;
 }
+:root[data-theme="h4xx0r"] .watch-stats dt { font: .55em var(--pixel); letter-spacing: .05em; }
+:root[data-theme="h4xx0r"] .watch-stats dd { color: var(--phosphor); }
+:root[data-theme="h4xx0r"] .watch-stats .warn,
 :root[data-theme="h4xx0r"] .panel-stats .warn { text-decoration: underline; text-underline-offset: .15em; }
 :root[data-theme="h4xx0r"] .panel-note { font-size: 18px; }
 :root[data-theme="h4xx0r"] .panel-note.bad::before { content: "!! "; }
@@ -694,15 +717,31 @@ button:hover { border-color: var(--ink-dim); }
         </div>
       </div>
     </div>
+    <div class="watch-overlay watch-server" id="server" hidden>
+      <p class="watch-name" data-t>Brušocam server</p>
+      <p class="watch-model" id="server-model"></p>
+      <dl class="watch-stats">
+        <div id="srv-power-row"><dt data-t>Power supply</dt><dd id="srv-power"></dd></div>
+        <div id="srv-throttle-row"><dt data-t>Throttling</dt><dd id="srv-throttle"></dd></div>
+        <div id="srv-temp-row"><dt data-t>CPU temperature</dt><dd id="srv-temp"></dd></div>
+        <div id="srv-mhz-row"><dt data-t>CPU clock</dt><dd id="srv-mhz"></dd></div>
+        <div id="srv-load-row"><dt data-t>Load</dt><dd id="srv-load"></dd></div>
+        <div id="srv-mem-row"><dt data-t>Memory</dt><dd id="srv-mem"></dd></div>
+        <div id="srv-wifi-row"><dt data-t>Wi-Fi signal</dt><dd id="srv-wifi"></dd></div>
+        <div id="srv-tx-row"><dt data-t>Sending</dt><dd id="srv-tx"></dd></div>
+        <div id="srv-fps-row"><dt data-t>Stream</dt><dd id="srv-fps"></dd></div>
+        <div id="srv-uptime-row"><dt data-t>Uptime</dt><dd id="srv-uptime"></dd></div>
+      </dl>
+    </div>
     <div class="watch-glass" aria-hidden="true"></div>
     <button type="button" class="watch-full" id="watch-full" hidden data-t>Full screen</button>
   </figure>
   <p class="note" id="watch-note"></p>
 
-  <section class="panel" id="battery" hidden>
-    <h2 id="bat-name"></h2>
+  <section class="panel" id="site" hidden>
+    <h2 id="site-name"></h2>
     <p class="panel-sub" id="bat-model"></p>
-    <dl class="panel-stats">
+    <dl class="panel-stats" id="bat-stats">
       <div id="bat-soc-row">
         <dt data-t>Charge</dt><dd id="bat-soc"></dd>
         <div class="panel-bar" id="bat-bar"><i id="bat-bar-fill"></i></div>
@@ -721,24 +760,21 @@ button:hover { border-color: var(--ink-dim); }
       <div id="bat-age-row"><dt data-t>Last heard</dt><dd id="bat-age"></dd></div>
     </dl>
     <p class="panel-note" id="bat-note"></p>
+    <dl class="panel-stats panel-group" id="mob-stats">
+      <div id="mob-operator-row"><dt id="mob-operator-label" data-t>Operator</dt><dd id="mob-operator"></dd></div>
+      <div id="mob-network-row"><dt data-t>Network</dt><dd id="mob-network"></dd></div>
+      <div id="mob-signal-row"><dt data-t>Mobile signal</dt><dd id="mob-signal"></dd></div>
+      <div id="mob-sinr-row"><dt>SINR</dt><dd id="mob-sinr"></dd></div>
+      <div id="mob-nr-row"><dt data-t>5G signal</dt><dd id="mob-nr"></dd></div>
+      <div id="mob-band-row"><dt data-t>Band</dt><dd id="mob-band"></dd></div>
+      <div id="mob-rx-row"><dt data-t>Received</dt><dd id="mob-rx"></dd></div>
+      <div id="mob-tx-row"><dt data-t>Sent</dt><dd id="mob-tx"></dd></div>
+      <div id="mob-temp-row"><dt data-t>Modem temperature</dt><dd id="mob-temp"></dd></div>
+      <div id="mob-age-row"><dt data-t>Last heard</dt><dd id="mob-age"></dd></div>
+    </dl>
+    <p class="panel-note" id="mob-note"></p>
   </section>
 
-  <section class="panel" id="server" hidden>
-    <h2 data-t>Brušocam server</h2>
-    <p class="panel-sub" id="server-model"></p>
-    <dl class="panel-stats">
-      <div id="srv-power-row"><dt data-t>Power supply</dt><dd id="srv-power"></dd></div>
-      <div id="srv-throttle-row"><dt data-t>Throttling</dt><dd id="srv-throttle"></dd></div>
-      <div id="srv-temp-row"><dt data-t>CPU temperature</dt><dd id="srv-temp"></dd></div>
-      <div id="srv-mhz-row"><dt data-t>CPU clock</dt><dd id="srv-mhz"></dd></div>
-      <div id="srv-load-row"><dt data-t>Load</dt><dd id="srv-load"></dd></div>
-      <div id="srv-mem-row"><dt data-t>Memory</dt><dd id="srv-mem"></dd></div>
-      <div id="srv-wifi-row"><dt data-t>Wi-Fi signal</dt><dd id="srv-wifi"></dd></div>
-      <div id="srv-tx-row"><dt data-t>Sending</dt><dd id="srv-tx"></dd></div>
-      <div id="srv-fps-row"><dt data-t>Stream</dt><dd id="srv-fps"></dd></div>
-      <div id="srv-uptime-row"><dt data-t>Uptime</dt><dd id="srv-uptime"></dd></div>
-    </dl>
-  </section>
 </main>
 <footer>
   <span class="brand">Brušocam</span> <span id="version"></span>
@@ -770,9 +806,10 @@ button:hover { border-color: var(--ink-dim); }
  * at least every second, so silence means Brušocam has gone, and the
  * browser's EventSource reconnects by itself.
  *
- * Under the picture, the events also carry the battery, a Victron battery
- * monitor Brušocam hears over Bluetooth (-victron-mac), and the health of
- * Brušocam's own server. */
+ * The events also carry the health of Brušocam's own server, shown over the
+ * picture's top left corner, and, under the picture, the battery, a Victron
+ * battery monitor Brušocam hears over Bluetooth (-victron-mac), and the
+ * mobile connection of a Teltonika router (-teltonika-url). */
 const QUIET_MS = 5000;                     // no event this long, and it says so
 const CAMERA_RETRY_MS = 10000;
 const CAMERA_FIRST_MS = 8000;              // no picture by then, and it is down
@@ -848,6 +885,17 @@ const DE = {
   "machine coordinates": "Maschinenkoordinaten",
   "{name} Stats": "{name}-Messwerte",
   "Charge": "Ladezustand",
+  "Operator": "Anbieter",
+  "Network": "Netz",
+  "Received": "Empfangen",
+  "Sent": "Gesendet",
+  "Mobile signal": "Mobilfunksignal",
+  "5G signal": "5G-Signal",
+  "Band": "Frequenzband",
+  "Modem temperature": "Modemtemperatur",
+  "Roaming on": "Roaming bei",
+  "{db} dB": "{db} dB",
+  "Asking the router…": "Frage den Router …",
   "Voltage": "Spannung",
   "Current": "Strom",
   "Power": "Leistung",
@@ -890,8 +938,6 @@ const DE = {
   "{error}. Brušocam keeps trying.": "{error}. Brušocam versucht es weiter.",
   "Brušocam is connecting to {machine}.": "Brušocam verbindet sich mit {machine}.",
   "Brušocam is not answering. Trying again.": "Brušocam antwortet nicht. Neuer Versuch.",
-  "No FluidNC controller is set, so this is the camera alone. Start Brušocam with -fluidnc-url= to see one here.":
-    "Keine FluidNC-Steuerung angegeben, daher nur das Kamerabild. Starten Sie Brušocam mit -fluidnc-url=, um hier eine zu sehen.",
   "This Brušocam has its MJPEG stream turned off (-camera-stream.disabled), so there is no picture to show.":
     "Bei dieser Brušocam ist der MJPEG-Datenstrom abgeschaltet (-camera-stream.disabled), daher gibt es kein Bild.",
   "No picture from the camera. Trying again every {seconds} seconds.":
@@ -1036,7 +1082,7 @@ const CLOCKS = {
      latency, but an iframe cannot have the box laid over it and still go
      full screen with it. */
   let cameraRetry = null;
-  // On <main>, not the picture, so the server panel under it is as wide.
+  // On <main>, not the picture, so the panel under it is as wide.
   function fitTo(w, h) {
     if (w > 0 && h > 0) document.querySelector("main").style.setProperty("--aspect", w / h);
   }
@@ -1046,6 +1092,7 @@ const CLOCKS = {
     img.hidden = alone;
     empty.hidden = !alone;
     overlay.classList.toggle("alone", alone);
+    $("server").classList.toggle("alone", alone);
     if (alone) say(empty, text, vars);
   }
   function startCamera() {
@@ -1243,9 +1290,20 @@ const CLOCKS = {
     return (v < 0 ? "\u2212" : "+") + s;
   }
 
+  /* The place the machine is: its battery, and the mobile connection it is
+     on, either or both, under the battery's name. */
+  function showSite(battery, mobile) {
+    $("site").hidden = false;
+    say($("site-name"), "{name} Stats", { name: battery ? battery.name : "Mobile" });
+    $("bat-stats").hidden = !battery;
+    $("mob-stats").hidden = !mobile;
+    if (battery) showBattery(battery);
+    else { $("bat-model").textContent = ""; say($("bat-note"), ""); }
+    if (mobile) showMobile(mobile);
+    else say($("mob-note"), "");
+  }
+
   function showBattery(b) {
-    $("battery").hidden = false;
-    say($("bat-name"), "{name} Stats", { name: b.name });
     $("bat-model").textContent = b.model || "";
 
     // Nothing heard yet, and every row is hidden.
@@ -1299,17 +1357,75 @@ const CLOCKS = {
     note.classList.toggle("bad", !!b.error);
   }
 
+  /* ---- the mobile connection ---- */
+  const mobileRow = (id, ...rest) => panelRow(`mob-${id}`, ...rest);
+  const MOBILE_LATE_MS = 15000;              // it is asked every five seconds
+
+  function bytesOf(n) {
+    if (n >= 1e9) return `${(n / 1e9).toFixed(2)} GB`;
+    if (n >= 1e6) return `${(n / 1e6).toFixed(1)} MB`;
+    return `${Math.round(n / 1e3)} kB`;
+  }
+
+  /* RSRP, which is what the LTE and 5G cell is heard at; RSSI only where
+     there is none. */
+  function signalOf(dbm, good, fair) {
+    return [dbm >= good ? "{dbm} dBm · good" : dbm >= fair ? "{dbm} dBm · fair" : "{dbm} dBm · weak",
+      { dbm: String(Math.round(dbm)).replace("-", "\u2212") }, dbm < fair ? "warn" : ""];
+  }
+
+  function showMobile(m) {
+    const heard = typeof m.age === "number";
+    const v = heard ? m : {};
+
+    // Swisscom, or roaming on it, which the label says; 5G-NSA, or Not
+    // connected.
+    const roaming = v.netstate === "Roaming";
+    say($("mob-operator-label"), roaming ? "Roaming on" : "Operator");
+    mobileRow("operator", v.operator, String(v.operator), null, roaming ? "warn" : "");
+    if (v.state && v.state !== "Connected") mobileRow("network", v.state, "Not connected", null, "bad");
+    else mobileRow("network", v.conntype || v.ntype, String(v.conntype || v.ntype));
+
+    if (typeof v.rsrp === "number") mobileRow("signal", v.rsrp, ...signalOf(v.rsrp, -90, -105));
+    else if (typeof v.rssi === "number") mobileRow("signal", v.rssi, ...signalOf(v.rssi, -70, -85));
+    else mobileRow("signal", null);
+    mobileRow("sinr", v.sinr, "{db} dB", { db: String(v.sinr).replace("-", "\u2212") }, v.sinr < 0 ? "warn" : "");
+    if (typeof v.nr_rsrp === "number") mobileRow("nr", v.nr_rsrp, ...signalOf(v.nr_rsrp, -90, -105));
+    else mobileRow("nr", null);
+    mobileRow("band", v.band, String(v.band));
+    // Since the modem connected.
+    mobileRow("rx", v.rxbytes, typeof v.rxbytes === "number" ? bytesOf(v.rxbytes) : "");
+    mobileRow("tx", v.txbytes, typeof v.txbytes === "number" ? bytesOf(v.txbytes) : "");
+    mobileRow("temp", v.temperature, "{t} °C", { t: v.temperature },
+      v.temperature >= 80 ? "bad" : v.temperature >= 70 ? "warn" : "");
+
+    const age = heard && m.age >= MOBILE_LATE_MS ? m.age : null;
+    const late = age === null ? [] : age < 60000 ? ["{n} s ago", { n: Math.round(age / 1000) }]
+      : age < 3600000 ? ["{m} min ago", { m: Math.round(age / 60000) }]
+      : ["{h} h ago", { h: Math.round(age / 3600000) }];
+    mobileRow("age", age, ...late, age >= 300000 ? "bad" : "warn");
+
+    const note = $("mob-note");
+    if (m.error) say(note, m.error + ".");
+    else if (!heard) say(note, "Asking the router…");
+    else say(note, "");
+    note.classList.toggle("bad", !!m.error);
+  }
+
   function onEvent(ev) {
     eventAt = Date.now();
     let d;
     try { d = JSON.parse(ev.data); } catch (e) { return; }
-    if (d.battery) showBattery(d.battery);
+    if (d.battery || d.mobile) showSite(d.battery, d.mobile);
     if (d.server) showServer(d.server);
     if (typeof d.viewers === "number") {
       say(show.viewers, d.viewers === 1 ? "{n} viewer" : "{n} viewers", { n: d.viewers });
       show.viewers.hidden = false;
     }
-    if (!host) return;
+    if (!host) {
+      say(note, "");    // Brušocam answers again, if it had stopped
+      return;
+    }
     if (d.connected) {
       say(note, "Watching {machine}.", { machine });
       if (d.status) heard(d.status, d.wco, d.ov);
@@ -1325,11 +1441,8 @@ const CLOCKS = {
   // The events carry the count of viewers too, so they are listened to with
   // or without a controller; the machine's lines only with one.
   function startMachine() {
+    // Without a controller there is nothing to say about one.
     show.machine.hidden = !host;
-    if (!host) {
-      say(note, "No FluidNC controller is set, so this is the camera alone. "
-        + "Start Brušocam with -fluidnc-url= to see one here.");
-    }
     eventAt = Date.now();
     events = new EventSource("fluidnc");
     events.onmessage = onEvent;
