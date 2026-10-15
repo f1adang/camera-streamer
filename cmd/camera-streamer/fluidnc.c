@@ -690,17 +690,9 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
     fputs(",\"battery\":", stream);
     victron_json(stream);
     fputs(",\"mobile\":", stream);
-    if (teltonika_options.url[0] && tplink_options.url[0]) {
-      fputc('[', stream);
-      teltonika_json(stream);
-      fputc(',', stream);
-      tplink_json(stream);
-      fputc(']', stream);
-    } else if (tplink_options.url[0]) {
-      tplink_json(stream);
-    } else {
-      teltonika_json(stream);
-    }
+    teltonika_json(stream);
+    fputs(",\"ap\":", stream);
+    tplink_json(stream);
     fputs("}\n\n", stream);
     bool gone = fflush(stream) || ferror(stream);
 

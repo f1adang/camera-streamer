@@ -175,7 +175,7 @@ option_t all_options[] = {
   DEFINE_OPTION_PTR(teltonika, user, string, "The router's user for its API."),
   DEFINE_OPTION_PTR(teltonika, password, string, "That user's password."),
 
-  DEFINE_OPTION_PTR(tplink, url, string, "Read the mobile connection of this TP-Link router (such as Archer MR402-Outdoor) and show it on `/telemetry`. Ex.: `-tplink-url=http://192.168.1.1`"),
+  DEFINE_OPTION_PTR(tplink, url, string, "Read the Wi-Fi access point and connected client stats of this TP-Link router (such as Archer MR402-Outdoor) and show them on `/telemetry`. Ex.: `-tplink-url=http://192.168.1.1`"),
   DEFINE_OPTION_PTR(tplink, user, string, "The router's user for its API. Defaults to admin."),
   DEFINE_OPTION_PTR(tplink, password, string, "That user's password."),
 
