@@ -47,7 +47,9 @@ the controller. It relays the status reports as server-sent events on
 looked at (a hidden tab lets go), and is sent with or without a controller. `status` is the
 latest report as the controller sent it, and `wco` and `ov` the work offset and the overrides
 from the last report that carried them, since FluidNC sends those only every few reports.
-`battery` is the Victron battery monitor below, or `null` without one. `server` is the health of the host camera-streamer runs on, shown on the page as "Brušocam
+`battery` and `mobile` are the Victron battery monitor and the Teltonika router below, or
+`null` without them. `server` is the health of the host camera-streamer runs on, shown in a
+box over the picture's top left corner (under the picture, when it is narrow) as "Brušocam
 server": the board's model from the device tree, the Raspberry Pi firmware's `throttled` flags
 (under-voltage, clock capped, throttled, soft temperature limit, now and since boot) or, on
 kernels without them, the `undervoltage` alarm, the CPU temperature and clock, the load,
@@ -71,8 +73,8 @@ Each viewer of `/telemetry` holds two HTTP connections, `/stream` and `/fluidnc`
 ### Victron battery monitor
 
 Under the picture, `/telemetry` can show a Victron battery monitor (a SmartShunt, a BMV, or
-one on a VE.Direct Bluetooth Smart dongle) as a panel titled after it, "Randen Stats" for
-`--victron-name=Randen`: the state of charge, voltage, current, power, Ah consumed, time to
+one on a VE.Direct Bluetooth Smart dongle) as a panel titled after it, "Rande Stats" for
+`--victron-name=Rande`: the state of charge, voltage, current, power, Ah consumed, time to
 go, the aux input (battery temperature, starter battery or midpoint), any alarm, and the
 Bluetooth signal. camera-streamer hears it over Bluetooth through Instant Readout, which the
 monitor puts, encrypted, into every advertisement: no connection or pairing, and the
@@ -82,13 +84,13 @@ readout details:
 
 - `--victron-mac=d4:12:34:56:78:9a` (the colons may be left out)
 - `--victron-key=<32 hex digits>`; it changes when the Bluetooth PIN is changed or reset
-- `--victron-name=Randen` to title the panel; "Battery" without it
+- `--victron-name=Rande` to title the panel; "Battery" without it
 
 The key is on the command line, so anybody who can log in to the host can read it.
 
 It is relayed with each `/fluidnc` event:
 
-    "battery":{"name":"Randen","model":"SmartShunt 500A/50mV","error":"","age":958,"rssi":-72,"soc":66.9,"voltage":12.85,"current":-2.336,"consumed_ah":41.4,"ttg_min":4445,"alarm":0,"temperature":null,"starter_voltage":null,"midpoint_voltage":null}
+    "battery":{"name":"Rande","model":"SmartShunt 500A/50mV","error":"","age":958,"rssi":-72,"soc":66.9,"voltage":12.85,"current":-2.336,"consumed_ah":41.4,"ttg_min":4445,"alarm":0,"temperature":null,"starter_voltage":null,"midpoint_voltage":null}
 
 `age` is how many milliseconds ago the figures were heard, `null` until they are; the page
 says so once they are ten seconds old. `current` is positive while charging. `alarm` is the
@@ -103,6 +105,31 @@ and stops ten seconds after the last viewer leaves: a Raspberry Pi's Wi-Fi and B
 share a radio, and a scan takes time from the stream. With nothing heard for a minute it
 starts the scan over, as it does after `bluetoothd` restarts. It is built in when `make`
 finds `libsystemd` and `libcrypto` (`libsystemd-dev` and `libssl-dev`).
+
+### Teltonika router
+
+The same panel can show the mobile connection of a Teltonika router on RutOS 7, such as a
+TRB500: the operator (and whether it is roaming), the network (5G-NSA, LTE …, or not
+connected), the signal as RSRP, the SINR, the 5G cell's RSRP in 5G NSA, the band, the data
+received and sent since the modem connected, and the modem's temperature. Without a battery
+monitor the panel is "Mobile Stats".
+
+- `--teltonika-url=http://192.168.2.1` (plain HTTP; the router's WebUI must answer on it)
+- `--teltonika-user=admin`, the default
+- `--teltonika-password=<password>`; like the battery's key, readable on the host from the
+  command line
+
+camera-streamer logs in to the router's API (`POST /api/login`) and asks for
+`GET /api/modems/status` every five seconds while somebody watches, with the token until it
+runs out, logging in again when it has or when the router has forgotten it. After a failure,
+a refused login included, it waits thirty seconds, so that a wrong password does not lock the
+user out. It is relayed with each `/fluidnc` event:
+
+    "mobile":{"age":3847,"error":"","modem":"Internal modem","operator":"Swisscom","conntype":"5G-NSA","ntype":"5G (NSA)","state":"Connected","netstate":"Registered, home","simstate":"Inserted","band":"LTE B3","rssi":-61,"rsrp":-95,"rsrq":-11,"sinr":11,"nr_rsrp":-101,"nr_sinr":6,"signal_quality":72,"temperature":47,"rxbytes":1839567890,"txbytes":414145678}
+
+The figures are the first modem that is online, as the router names them, made numbers where
+the router sends them as strings; `nr_rsrp` and `nr_sinr` are the 5G cell's, from its
+`cell_info`. `age` and `error` are as for the battery.
 
 ## RTSP server
 
