@@ -9,6 +9,7 @@
 #include "cmd/camera-streamer/fluidnc.h"
 #include "cmd/camera-streamer/victron.h"
 #include "cmd/camera-streamer/teltonika.h"
+#include "cmd/camera-streamer/tplink.h"
 
 camera_options_t camera_options = {
   .path = "",
@@ -79,6 +80,12 @@ victron_options_t victron_options = {
 };
 
 teltonika_options_t teltonika_options = {
+  .url = "",
+  .user = "admin",
+  .password = ""
+};
+
+tplink_options_t tplink_options = {
   .url = "",
   .user = "admin",
   .password = ""
@@ -167,6 +174,10 @@ option_t all_options[] = {
   DEFINE_OPTION_PTR(teltonika, url, string, "Read the mobile connection of this Teltonika router (RutOS 7) and show it on `/telemetry`. Ex.: `-teltonika-url=http://192.168.2.1`"),
   DEFINE_OPTION_PTR(teltonika, user, string, "The router's user for its API."),
   DEFINE_OPTION_PTR(teltonika, password, string, "That user's password."),
+
+  DEFINE_OPTION_PTR(tplink, url, string, "Read the mobile connection of this TP-Link router (such as Archer MR402-Outdoor) and show it on `/telemetry`. Ex.: `-tplink-url=http://192.168.1.1`"),
+  DEFINE_OPTION_PTR(tplink, user, string, "The router's user for its API. Defaults to admin."),
+  DEFINE_OPTION_PTR(tplink, password, string, "That user's password."),
 
   DEFINE_OPTION_DEFAULT(log, debug, bool, "1", "Enable debug logging."),
   DEFINE_OPTION_DEFAULT(log, verbose, bool, "1", "Enable verbose logging."),
