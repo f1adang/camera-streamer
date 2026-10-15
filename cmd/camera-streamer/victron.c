@@ -29,6 +29,7 @@
 #ifdef USE_VICTRON
 #include <errno.h>
 #include <openssl/evp.h>
+#include <unistd.h>
 #include <systemd/sd-bus.h>
 #endif
 
@@ -401,7 +402,25 @@ static int victron_start_scan(sd_bus *bus)
   if (r >= 0)
     r = sd_bus_call_method(bus, "org.bluez", adapter_path, "org.bluez.Adapter1",
       "StartDiscovery", &error, NULL, "");
-  if (r < 0)
+
+  // What went wrong, in what to do about it, where it is known. BlueZ that
+  // will not start - the bus waits 25 s for it - is most often no adapter
+  // in the kernel, which bluetoothd's unit will not start without.
+  if (r >= 0)
+    ;
+  else if (sd_bus_error_has_names(&error, "org.freedesktop.DBus.Error.ServiceUnknown",
+      "org.freedesktop.DBus.Error.TimedOut", "org.freedesktop.DBus.Error.NoReply",
+      "org.freedesktop.DBus.Error.Spawn.ChildExited", "org.freedesktop.DBus.Error.Spawn.Failed"))
+    victron_bus_error(access("/sys/class/bluetooth/hci0", F_OK) < 0
+      ? "BlueZ is not running, as this host has no Bluetooth adapter hci0: Bluetooth may be "
+        "turned off, with dtoverlay=disable-bt in /boot/firmware/config.txt"
+      : "BlueZ is not running: see systemctl status bluetooth", 0, NULL);
+  else if (sd_bus_error_has_name(&error, "org.bluez.Error.NotReady"))
+    victron_bus_error("The Bluetooth adapter is off: rfkill unblock bluetooth, then "
+      "bluetoothctl power on", 0, NULL);
+  else if (sd_bus_error_has_name(&error, "org.freedesktop.DBus.Error.UnknownObject"))
+    victron_bus_error("BlueZ has no adapter hci0", 0, NULL);
+  else
     victron_bus_error("Cannot scan for Bluetooth devices", r, &error);
   sd_bus_error_free(&error);
   return r;
