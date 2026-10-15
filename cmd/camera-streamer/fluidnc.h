@@ -11,3 +11,6 @@ typedef struct fluidnc_options_s {
 
 // The controller's status reports, relayed as server-sent events.
 void http_fluidnc_events(http_worker_t *worker, FILE *stream);
+
+// `s` as a JSON string, quoted and escaped.
+void json_string(FILE *stream, const char *s);

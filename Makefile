@@ -32,6 +32,7 @@ USE_FFMPEG ?= $(shell pkg-config libavutil libavformat libavcodec && echo 1)
 USE_LIBCAMERA ?= $(shell pkg-config libcamera && echo 1)
 USE_RTSP ?= $(shell pkg-config live555 && echo 1)
 USE_LIBDATACHANNEL ?= $(shell [ -e $(LIBDATACHANNEL_PATH)/CMakeLists.txt ] && echo 1)
+USE_VICTRON ?= $(shell pkg-config libsystemd libcrypto && echo 1)
 
 ifeq (1,$(DEBUG))
 CFLAGS += -g
@@ -54,6 +55,11 @@ endif
 ifeq (1,$(USE_RTSP))
 CFLAGS += -DUSE_RTSP $(shell pkg-config --cflags live555)
 LDLIBS += $(shell pkg-config --libs live555)
+endif
+
+ifeq (1,$(USE_VICTRON))
+CFLAGS += -DUSE_VICTRON $(shell pkg-config --cflags libsystemd libcrypto)
+LDLIBS += $(shell pkg-config --libs libsystemd libcrypto)
 endif
 
 ifeq (1,$(USE_LIBDATACHANNEL))

@@ -47,7 +47,7 @@ the controller. It relays the status reports as server-sent events on
 looked at (a hidden tab lets go), and is sent with or without a controller. `status` is the
 latest report as the controller sent it, and `wco` and `ov` the work offset and the overrides
 from the last report that carried them, since FluidNC sends those only every few reports.
-`server` is the health of the host camera-streamer runs on, shown on the page as "Brušocam
+`battery` is the Victron battery monitor below, or `null` without one. `server` is the health of the host camera-streamer runs on, shown on the page as "Brušocam
 server": the board's model from the device tree, the Raspberry Pi firmware's `throttled` flags
 (under-voltage, clock capped, throttled, soft temperature limit, now and since boot) or, on
 kernels without them, the `undervoltage` alarm, the CPU temperature and clock, the load,
@@ -67,6 +67,42 @@ controller cannot be reached. The WebUI 3 socket (`ws://<host>/`) is used, or We
 
 Each viewer of `/telemetry` holds two HTTP connections, `/stream` and `/fluidnc`, out of
 `--http-maxcons` (10 by default).
+
+### Victron battery monitor
+
+Under the picture, `/telemetry` can show a Victron battery monitor (a SmartShunt, a BMV, or
+one on a VE.Direct Bluetooth Smart dongle) as a panel titled after it, "Randen Stats" for
+`--victron-name=Randen`: the state of charge, voltage, current, power, Ah consumed, time to
+go, the aux input (battery temperature, starter battery or midpoint), any alarm, and the
+Bluetooth signal. camera-streamer hears it over Bluetooth through Instant Readout, which the
+monitor puts, encrypted, into every advertisement: no connection or pairing, and the
+VictronConnect app can still connect to it. Turn Instant readout via Bluetooth on in
+VictronConnect, and copy the MAC address and the encryption key from Product info, Instant
+readout details:
+
+- `--victron-mac=d4:12:34:56:78:9a` (the colons may be left out)
+- `--victron-key=<32 hex digits>`; it changes when the Bluetooth PIN is changed or reset
+- `--victron-name=Randen` to title the panel; "Battery" without it
+
+The key is on the command line, so anybody who can log in to the host can read it.
+
+It is relayed with each `/fluidnc` event:
+
+    "battery":{"name":"Randen","model":"SmartShunt 500A/50mV","error":"","age":958,"rssi":-72,"soc":66.9,"voltage":12.85,"current":-2.336,"consumed_ah":41.4,"ttg_min":4445,"alarm":0,"temperature":null,"starter_voltage":null,"midpoint_voltage":null}
+
+`age` is how many milliseconds ago the figures were heard, `null` until they are; the page
+says so once they are ten seconds old. `current` is positive while charging. `alarm` is the
+monitor's alarm reasons, a bit each. What the monitor does not know is `null`, and its row is
+not shown. `error` says what is wrong: no Bluetooth adapter, a key that does not fit, or a
+Victron device that is not a battery monitor.
+
+The advertisements are heard through BlueZ over D-Bus, so `bluetoothd` must be running with
+the adapter (`hci0`) powered, and camera-streamer must be allowed to talk to `org.bluez`;
+under systemd add `SupplementaryGroups=bluetooth`. It scans only while somebody watches,
+and stops ten seconds after the last viewer leaves: a Raspberry Pi's Wi-Fi and Bluetooth
+share a radio, and a scan takes time from the stream. With nothing heard for a minute it
+starts the scan over, as it does after `bluetoothd` restarts. It is built in when `make`
+finds `libsystemd` and `libcrypto` (`libsystemd-dev` and `libssl-dev`).
 
 ## RTSP server
 

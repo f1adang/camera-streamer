@@ -7,6 +7,7 @@
 #include "output/webrtc/webrtc.h"
 #include "output/output.h"
 #include "cmd/camera-streamer/fluidnc.h"
+#include "cmd/camera-streamer/victron.h"
 
 camera_options_t camera_options = {
   .path = "",
@@ -68,6 +69,12 @@ webrtc_options_t webrtc_options = {
 fluidnc_options_t fluidnc_options = {
   .url = "",
   .name = ""
+};
+
+victron_options_t victron_options = {
+  .mac = "",
+  .key = "",
+  .name = "Battery"
 };
 
 option_value_t camera_formats[] = {
@@ -145,6 +152,10 @@ option_t all_options[] = {
 
   DEFINE_OPTION_PTR(fluidnc, url, string, "Connect to this FluidNC controller and show its telemetry over the stream on `/telemetry`. Ex.: `-fluidnc-url=fluidnc.local`"),
   DEFINE_OPTION_PTR(fluidnc, name, string, "Name the FluidNC controller on `/telemetry`. Defaults to its host name."),
+
+  DEFINE_OPTION_PTR(victron, mac, string, "Listen for this Victron battery monitor's Instant Readout over Bluetooth and show it on `/telemetry`. Ex.: `-victron-mac=d4:12:34:56:78:9a`"),
+  DEFINE_OPTION_PTR(victron, key, string, "The Instant Readout encryption key, as VictronConnect shows it under Product info."),
+  DEFINE_OPTION_PTR(victron, name, string, "Name the battery on `/telemetry`."),
 
   DEFINE_OPTION_DEFAULT(log, debug, bool, "1", "Enable debug logging."),
   DEFINE_OPTION_DEFAULT(log, verbose, bool, "1", "Enable verbose logging."),
