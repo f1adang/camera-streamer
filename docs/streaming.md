@@ -105,8 +105,12 @@ not shown. `error` says what is wrong: no Bluetooth adapter, a key that does not
 Victron device that is not a battery monitor.
 
 The advertisements are heard through BlueZ over D-Bus, so `bluetoothd` must be running with
-the adapter (`hci0`) powered, and camera-streamer must be allowed to talk to `org.bluez`;
-under systemd add `SupplementaryGroups=bluetooth`. It scans only while somebody watches,
+the adapter (`hci0`) powered, and camera-streamer must be allowed to talk to `org.bluez`,
+which on Debian and Raspberry Pi OS any user of the system is. Not one that systemd's
+`DynamicUser=` makes up, though: the system bus cannot look it up, and drops the connection
+("The system bus would not talk to camera-streamer's user"). Run it as a system user instead,
+made once with `useradd --system --no-create-home --groups video,i2c camera-streamer`, with
+`User=camera-streamer` in place of `DynamicUser=yes`. It scans only while somebody watches,
 and stops ten seconds after the last viewer leaves: a Raspberry Pi's Wi-Fi and Bluetooth
 share a radio, and a scan takes time from the stream. With nothing heard for a minute it
 starts the scan over, as it does after `bluetoothd` restarts. It is built in when `make`
