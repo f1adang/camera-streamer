@@ -353,8 +353,10 @@ static void victron_bus_error(const char *what, int r, sd_bus_error *error)
 
   if (error && sd_bus_error_is_set(error))
     snprintf(text, sizeof(text), "%s: %s", what, error->message);
-  else
+  else if (r < 0)
     snprintf(text, sizeof(text), "%s: %s", what, strerror(-r));
+  else
+    snprintf(text, sizeof(text), "%s", what);
   LOG_INFO(NULL, "Victron: %s.", text);
   victron_set_error(text);
 }
@@ -372,7 +374,14 @@ static int victron_connect(sd_bus **bus)
   if (r >= 0)
     r = sd_bus_match_signal(*bus, NULL, "org.bluez", "/",
       "org.freedesktop.DBus.ObjectManager", "InterfacesAdded", victron_on_added, NULL);
-  if (r < 0) {
+  // The bus lets a client connect and then drops it, before its first
+  // call, when it cannot look up the client's user: one that systemd's
+  // DynamicUser= makes up, where the system has no nss-systemd.
+  if (r == -ENOTCONN) {
+    victron_bus_error("The system bus would not talk to camera-streamer's user, which it does not "
+      "know; under systemd, run it as a User= of the system rather than with DynamicUser=", 0, NULL);
+    *bus = sd_bus_flush_close_unref(*bus);
+  } else if (r < 0) {
     victron_bus_error("Cannot listen to BlueZ", r, NULL);
     *bus = sd_bus_flush_close_unref(*bus);
   }
