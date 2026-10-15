@@ -17,6 +17,7 @@
 #include "cmd/camera-streamer/victron.h"
 #include "cmd/camera-streamer/fluidnc.h"
 #include "util/opts/log.h"
+#include "version.h"
 
 #include <math.h>
 #include <pthread.h>
@@ -527,7 +528,8 @@ void victron_json(FILE *stream)
 #ifdef USE_VICTRON
   pthread_once(&victron_once, victron_start);
 #else
-  victron_set_error("This Brušocam was built without Bluetooth (libsystemd and libcrypto)");
+  victron_set_error("This Brušocam was built without Bluetooth: install pkg-config, libsystemd-dev "
+    "and libssl-dev, and build it again");
 #endif
 
   pthread_mutex_lock(&victron.lock);

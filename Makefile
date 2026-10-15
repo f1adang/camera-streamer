@@ -57,8 +57,10 @@ CFLAGS += -DUSE_RTSP $(shell pkg-config --cflags live555)
 LDLIBS += $(shell pkg-config --libs live555)
 endif
 
+# USE_VICTRON itself goes in version.h, so that turning it on or off
+# rebuilds what uses it.
 ifeq (1,$(USE_VICTRON))
-CFLAGS += -DUSE_VICTRON $(shell pkg-config --cflags libsystemd libcrypto)
+CFLAGS += $(shell pkg-config --cflags libsystemd libcrypto)
 LDLIBS += $(shell pkg-config --libs libsystemd libcrypto)
 endif
 
@@ -96,6 +98,11 @@ camera-streamer: $(filter-out cmd/%, $(TARGET_OBJS)) $(filter cmd/camera-streame
 .PHONY: version
 version:
 	printf "#define GIT_VERSION \"$(GIT_VERSION)\"\n#define GIT_REVISION \"$(GIT_REVISION)\"\n" > version.h.tmp
+	@if [ "$(USE_VICTRON)" = 1 ]; then \
+		printf "#define USE_VICTRON\n" >> version.h.tmp; \
+	else \
+		echo "Building without Bluetooth for the Victron battery monitor: pkg-config finds no libsystemd and libcrypto (apt install pkg-config libsystemd-dev libssl-dev)."; \
+	fi
 	if $(CCACHE) $(CXX) $(CFLAGS) -o tests/libcamera/orientation.o -c tests/libcamera/orientation.cc 2>/dev/null; then \
 		printf "#define LIBCAMERA_USES_ORIENTATION\n" >> version.h.tmp; \
 	else \

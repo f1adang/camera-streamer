@@ -110,7 +110,9 @@ under systemd add `SupplementaryGroups=bluetooth`. It scans only while somebody 
 and stops ten seconds after the last viewer leaves: a Raspberry Pi's Wi-Fi and Bluetooth
 share a radio, and a scan takes time from the stream. With nothing heard for a minute it
 starts the scan over, as it does after `bluetoothd` restarts. It is built in when `make`
-finds `libsystemd` and `libcrypto` (`libsystemd-dev` and `libssl-dev`).
+finds `libsystemd` and `libcrypto` with `pkg-config` (`apt install pkg-config libsystemd-dev
+libssl-dev`); without them, `make` says so, and the page says the build has no Bluetooth.
+Installing them later and running `make` again is enough.
 
 ### Teltonika router
 
