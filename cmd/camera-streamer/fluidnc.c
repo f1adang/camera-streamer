@@ -11,6 +11,10 @@
 // Standing still they stop, so `?`, the realtime status request, is sent
 // after a quiet while; no answer at all, and the socket is taken as dead.
 //
+// What the controller is - its board, from the config, `$/board`, and its
+// firmware, from `$I` - is asked once a connection; FluidNC refuses `$`
+// commands while it runs a job, so they are asked again when it is idle.
+//
 // Viewers get the latest report as server-sent events on /fluidnc: one
 // long-lived response, as /stream is, which passes a proxy that passes the
 // stream, rather than a request per report. Each event also counts the
@@ -41,6 +45,7 @@
 #define FLUIDNC_IDLE_MS     10000  // nobody watching this long, and it lets go
 #define FLUIDNC_CONNECT_S   5
 #define FLUIDNC_EVENT_MS    1000   // an event at least this often, changed or not
+#define FLUIDNC_INFO_MS     30000  // without its board or firmware, it asks again this often
 #define FLUIDNC_LINE        512
 #define FLUIDNC_ERROR       1024
 
@@ -66,6 +71,8 @@ static struct {
   char status[FLUIDNC_LINE];
   char wco[128];
   char ov[64];
+  char board[128];      // "MKS DLC32", from `$/board`
+  char firmware[64];    // "FluidNC v3.7.8", from `$I`
   char error[FLUIDNC_ERROR];
 } fluidnc = {
   .lock = PTHREAD_MUTEX_INITIALIZER,
@@ -305,9 +312,30 @@ static void fluidnc_line(const char *line)
 
     fluidnc.seq++;
     pthread_cond_broadcast(&fluidnc.changed);
+  } else if (!strncmp(line, "$/board=", 8)) {
+    snprintf(fluidnc.board, sizeof(fluidnc.board), "%s", line + 8);
+  } else if (!strncmp(line, "[VER:", 5)) {
+    // "[VER:3.7 FluidNC v3.7.8:]": the build, then the firmware's name.
+    const char *name = strchr(line, ' ');
+    snprintf(fluidnc.firmware, sizeof(fluidnc.firmware), "%s", name ? name + 1 : line + 5);
+    fluidnc.firmware[strcspn(fluidnc.firmware, ":]")] = 0;
   }
 
   pthread_mutex_unlock(&fluidnc.lock);
+}
+
+// The board and the firmware, if not yet known: two lines of the console.
+static int fluidnc_ask_info(int fd)
+{
+  pthread_mutex_lock(&fluidnc.lock);
+  bool known = fluidnc.board[0] && fluidnc.firmware[0];
+  pthread_mutex_unlock(&fluidnc.lock);
+
+  if (known)
+    return 0;
+  if (fluidnc_send(fd, 0x1, "$I\n", 3) < 0 || fluidnc_send(fd, 0x1, "$/board\n", 8) < 0)
+    return -1;
+  return 0;
 }
 
 typedef struct {
@@ -499,6 +527,8 @@ static void *fluidnc_thread(void *arg)
     char why[FLUIDNC_ERROR];
 
     fluidnc_send(fd, 0x1, "?", 1);
+    fluidnc_ask_info(fd);
+    uint64_t info_asked_at = now_ms();
     if (fluidnc_read(fd, &reader, (unsigned char *)leftover, leftover_len) < 0)
       error = "The controller closed the connection";
 
@@ -522,7 +552,13 @@ static void *fluidnc_thread(void *arg)
       pthread_mutex_lock(&fluidnc.lock);
       uint64_t quiet = now - fluidnc.heard_at;
       bool idle = fluidnc.viewers == 0 && now - fluidnc.idle_since > FLUIDNC_IDLE_MS;
+      bool may_ask = !strncmp(fluidnc.status, "<Idle", 5) || !strncmp(fluidnc.status, "<Alarm", 6);
       pthread_mutex_unlock(&fluidnc.lock);
+
+      if (may_ask && now - info_asked_at > FLUIDNC_INFO_MS) {
+        info_asked_at = now;
+        fluidnc_ask_info(fd);
+      }
 
       if (idle) {
         // Nobody is watching: give the socket back to the controller.
@@ -621,10 +657,12 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
     int viewers = fluidnc.viewers;
     bool connected = fluidnc.connected;
     uint64_t age = now_ms() - fluidnc.heard_at;
-    char status[FLUIDNC_LINE], wco[128], ov[64], error[FLUIDNC_ERROR];
+    char status[FLUIDNC_LINE], wco[128], ov[64], board[128], firmware[64], error[FLUIDNC_ERROR];
     strcpy(status, connected ? fluidnc.status : "");
     strcpy(wco, fluidnc.wco);
     strcpy(ov, fluidnc.ov);
+    strcpy(board, fluidnc.board);
+    strcpy(firmware, fluidnc.firmware);
     strcpy(error, fluidnc.error);
     pthread_mutex_unlock(&fluidnc.lock);
 
@@ -637,6 +675,10 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
     json_string(stream, wco);
     fputs(",\"ov\":", stream);
     json_string(stream, ov);
+    fputs(",\"board\":", stream);
+    json_string(stream, board);
+    fputs(",\"firmware\":", stream);
+    json_string(stream, firmware);
     fputs(",\"error\":", stream);
     json_string(stream, error);
     fputs(",\"server\":", stream);
