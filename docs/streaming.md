@@ -76,17 +76,20 @@ controller cannot be reached. The WebUI 3 socket (`ws://<host>/`) is used, or We
 Each viewer of `/telemetry` holds two HTTP connections, `/stream` and `/fluidnc`, out of
 `--http-maxcons` (10 by default).
 
-### Victron battery monitor
+### Victron battery monitor or solar charger
 
-`/telemetry` can show a Victron battery monitor (a SmartShunt, a BMV, or one on a VE.Direct
-Bluetooth Smart dongle) in a box over the picture's bottom right corner (under the picture,
-when it is narrow), titled after it, "Rande Stats" for `--victron-name=Rande`: the state of charge, voltage, current, power, Ah consumed, time to
-go, the aux input (battery temperature, starter battery or midpoint), any alarm, and the
-Bluetooth signal. camera-streamer hears it over Bluetooth through Instant Readout, which the
-monitor puts, encrypted, into every advertisement: no connection or pairing, and the
-VictronConnect app can still connect to it. Turn Instant readout via Bluetooth on in
-VictronConnect, and copy the MAC address and the encryption key from Product info, Instant
-readout details:
+`/telemetry` can show a Victron battery monitor (a SmartShunt, a BMV) or solar charger (a
+SmartSolar or BlueSolar MPPT), or either on a VE.Direct Bluetooth Smart dongle, in a box over
+the picture's bottom right corner (under the picture, when it is narrow), titled after it,
+"Rande Stats" for `--victron-name=Rande`. For a battery monitor: the state of charge,
+voltage, current, power, Ah consumed, time to go, the aux input (battery temperature, starter
+battery or midpoint) and any alarm. For a solar charger: its charge state (bulk, absorption,
+float …), the battery's voltage and current, the solar power, today's yield, the load output
+and any charger error ("Err 2"). For either, the Bluetooth signal. camera-streamer hears it
+over Bluetooth through Instant Readout, which the device puts, encrypted, into every
+advertisement: no connection or pairing, and the VictronConnect app can still connect to it.
+Turn Instant readout via Bluetooth on in VictronConnect, and copy the MAC address and the
+encryption key from Product info, Instant readout details:
 
 - `--victron-mac=d4:12:34:56:78:9a` (the colons may be left out)
 - `--victron-key=<32 hex digits>`; it changes when the Bluetooth PIN is changed or reset
@@ -98,7 +101,10 @@ It is relayed with each `/fluidnc` event:
 
     "battery":{"name":"Rande","model":"SmartShunt 500A/50mV","error":"","age":958,"rssi":-72,"soc":66.9,"voltage":12.85,"current":-2.336,"consumed_ah":41.4,"ttg_min":4445,"alarm":0,"temperature":null,"starter_voltage":null,"midpoint_voltage":null}
 
-`age` is how many milliseconds ago the figures were heard, `null` until they are; the page
+`kind` is `battery_monitor` or `solar_charger`; a solar charger's are `charge_state` and
+`charger_error`, as Victron numbers them, `yield_wh`, `pv_w` and `load_a`, beside `voltage`
+and `current`, and what a battery monitor would give is `null`. `age` is how many
+milliseconds ago the figures were heard, `null` until they are; the page
 says so once they are ten seconds old. `current` is positive while charging. `alarm` is the
 monitor's alarm reasons, a bit each. What the monitor does not know is `null`, and its row is
 not shown. `error` says what is wrong: no Bluetooth adapter, a key that does not fit, or a

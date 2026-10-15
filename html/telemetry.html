@@ -709,15 +709,20 @@ button:hover { border-color: var(--ink-dim); }
         <p class="watch-ascii" id="bat-ascii" hidden></p>
         <dl class="watch-stats watch-stats-wide" id="bat-stats">
           <div id="bat-soc-row"><dt data-t>Charge</dt><dd id="bat-soc"></dd></div>
+          <div id="bat-state-row"><dt data-t>Charge state</dt><dd id="bat-state"></dd></div>
           <div id="bat-voltage-row"><dt data-t>Voltage</dt><dd id="bat-voltage"></dd></div>
           <div id="bat-current-row"><dt id="bat-current-label" data-t>Current</dt><dd id="bat-current"></dd></div>
           <div id="bat-power-row"><dt data-t>Power</dt><dd id="bat-power"></dd></div>
+          <div id="bat-pv-row"><dt data-t>Solar power</dt><dd id="bat-pv"></dd></div>
+          <div id="bat-yield-row"><dt data-t>Yield today</dt><dd id="bat-yield"></dd></div>
+          <div id="bat-load-row"><dt data-t>Load output</dt><dd id="bat-load"></dd></div>
           <div id="bat-consumed-row"><dt data-t>Consumed</dt><dd id="bat-consumed"></dd></div>
           <div id="bat-ttg-row"><dt data-t>Time to go</dt><dd id="bat-ttg"></dd></div>
           <div id="bat-temp-row"><dt data-t>Battery temperature</dt><dd id="bat-temp"></dd></div>
           <div id="bat-starter-row"><dt data-t>Starter battery</dt><dd id="bat-starter"></dd></div>
           <div id="bat-mid-row"><dt data-t>Midpoint</dt><dd id="bat-mid"></dd></div>
           <div id="bat-alarm-row"><dt data-t>Alarm</dt><dd id="bat-alarm"></dd></div>
+          <div id="bat-error-row"><dt data-t>Charger error</dt><dd id="bat-error"></dd></div>
           <div id="bat-rssi-row"><dt data-t>Bluetooth signal</dt><dd id="bat-rssi"></dd></div>
           <div id="bat-age-row"><dt data-t>Last heard</dt><dd id="bat-age"></dd></div>
         </dl>
@@ -855,6 +860,31 @@ const DE = {
   "{name} Stats": "{name}-Messwerte",
   "Camera": "Kamera",
   "Charge": "Ladezustand",
+  "Charge state": "Ladephase",
+  "Solar power": "Solarleistung",
+  "Yield today": "Ertrag heute",
+  "Load output": "Lastausgang",
+  "Charger error": "Ladereglerfehler",
+  "{kwh} kWh": "{kwh} kWh",
+  "{wh} Wh": "{wh} Wh",
+  "Err {n}": "Fehler {n}",
+  "Err {n} · {what}": "Fehler {n} · {what}",
+  "Off": "Aus",
+  "Low power": "Energiesparmodus",
+  "Fault": "Störung",
+  "Bulk": "Bulk",
+  "Absorption": "Absorption",
+  "Float": "Erhaltungsladung",
+  "Storage": "Lagerung",
+  "Equalize": "Ausgleichsladung",
+  "Inverting": "Wechselrichterbetrieb",
+  "Power supply mode": "Netzteilbetrieb",
+  "Starting up": "Startet",
+  "Repeated absorption": "Wiederholte Absorption",
+  "Recondition": "Rekonditionierung",
+  "Battery safe": "Batterieschutz",
+  "Active": "Aktiv",
+  "External control": "Externe Steuerung",
   "Operator": "Anbieter",
   "Network": "Netz",
   "Received": "Empfangen",
@@ -1262,6 +1292,28 @@ const CLOCKS = {
   ];
   const batteryRow = (id, ...rest) => statRow(`bat-${id}`, ...rest);
 
+  /* A solar charger's state, and its errors as its manual numbers them. */
+  const CHARGE_STATES = {
+    0: "Off", 1: "Low power", 2: "Fault", 3: "Bulk", 4: "Absorption", 5: "Float", 6: "Storage",
+    7: "Equalize", 9: "Inverting", 11: "Power supply mode", 245: "Starting up",
+    246: "Repeated absorption", 247: "Recondition", 248: "Battery safe", 249: "Active",
+    252: "External control",
+  };
+  const CHARGER_ERRORS = {
+    1: "Battery temperature too high", 2: "Battery voltage too high",
+    3: "Remote temperature sensor failure", 4: "Remote temperature sensor failure",
+    5: "Remote temperature sensor failure", 6: "Remote battery voltage sense failure",
+    7: "Remote battery voltage sense failure", 8: "Remote battery voltage sense failure",
+    11: "Battery high ripple voltage", 14: "Battery temperature too low",
+    17: "Charger temperature too high", 18: "Charger over current", 20: "Bulk time limit exceeded",
+    21: "Current sensor issue", 22: "Internal temperature sensor failure",
+    23: "Internal temperature sensor failure", 24: "Fan failure", 26: "Terminals overheated",
+    27: "Charger short circuit", 28: "Power stage issue", 29: "Over-charge protection",
+    33: "PV over-voltage", 34: "PV over-current", 35: "PV over-power",
+    38: "Input shutdown, battery voltage too high", 39: "Input shutdown, current flow while off",
+    40: "PV input failed to shut down",
+  };
+
   /* +8.42, −2.31 or 0.00: the sign of a flow says which way it goes, and a
      figure that rounds to nothing has none. */
   function signed(v, digits) {
@@ -1303,9 +1355,22 @@ const CLOCKS = {
     const amps = v.current;
     say($("bat-current-label"), amps >= 0.005 ? "Charging" : amps <= -0.005 ? "Discharging" : "Current");
     batteryRow("current", amps, "{a} A", { a: typeof amps === "number" ? signed(amps, 2) : "" });
-    const watts = typeof amps === "number" && typeof v.voltage === "number" ? amps * v.voltage : null;
+    // A solar charger says what its panels give, rather than what goes into
+    // the battery.
+    const solar = v.kind === "solar_charger";
+    const watts = !solar && typeof amps === "number" && typeof v.voltage === "number" ? amps * v.voltage : null;
     batteryRow("power", watts, "{w} W", { w: watts === null ? "" : signed(watts, 0) });
     batteryRow("consumed", v.consumed_ah, "{ah} Ah", { ah: v.consumed_ah?.toFixed(1) });
+
+    const state = v.charge_state;
+    batteryRow("state", state, CHARGE_STATES[state] || String(state), null, state === 2 ? "bad" : "");
+    batteryRow("pv", v.pv_w, "{w} W", { w: v.pv_w });
+    batteryRow("yield", v.yield_wh, v.yield_wh >= 1000 ? "{kwh} kWh" : "{wh} Wh",
+      { kwh: (v.yield_wh / 1000).toFixed(2), wh: v.yield_wh });
+    batteryRow("load", v.load_a, "{a} A", { a: v.load_a?.toFixed(1) });
+    const err = v.charger_error;
+    batteryRow("error", err ? err : null, CHARGER_ERRORS[err] ? "Err {n} · {what}" : "Err {n}",
+      { n: err, what: t(CHARGER_ERRORS[err] || "") }, "bad");
     // None while it charges, as in VictronConnect.
     if (typeof v.ttg_min === "number") batteryRow("ttg", v.ttg_min, ...uptimeOf(v.ttg_min * 60));
     else batteryRow("ttg", null);
