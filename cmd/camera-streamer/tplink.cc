@@ -792,18 +792,28 @@ static void *tplink_thread(void *arg)
 
     std::string error;
     nlohmann::json ap;
+    bool ok = false;
 
-    if (session.token.empty()) {
-      if (!tplink_login(session, error)) {
-        tplink_set_error(error);
-        continue;
+    for (int attempt = 0; attempt < 3; ++attempt) {
+      if (session.token.empty()) {
+        if (!tplink_login(session, error)) {
+          break;
+        }
       }
-    }
 
-    if (!tplink_read_ap(session, ap, error)) {
-      // If query failed with unauthorized/expired token, retry login immediately
+      if (tplink_read_ap(session, ap, error)) {
+        ok = true;
+        break;
+      }
+
+      // TP-Link routers answer /cgi_gdpr with HTTP 500 (ERR_NOT_ACCEPTED) when
+      // the session or encryption sequence expires or is preempted. Clear the
+      // cached session and immediately re-authenticate before surfacing an error.
       session.token.clear();
       session.cookie.clear();
+    }
+
+    if (!ok) {
       tplink_set_error(error);
       continue;
     }
