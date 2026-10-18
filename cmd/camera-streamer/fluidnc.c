@@ -19,6 +19,9 @@
 // long-lived response, as /stream is, which passes a proxy that passes the
 // stream, rather than a request per report. Each event also counts the
 // viewers, the /fluidnc responses open, with or without a controller.
+//
+// -fluidnc-url can name several controllers, a Brushograph each: each has its
+// own socket and thread, and every event carries them all, in that order.
 
 #include "cmd/camera-streamer/fluidnc.h"
 #include "cmd/camera-streamer/server_stats.h"
@@ -64,13 +67,10 @@ typedef struct {
   const char *protocol;
 } fluidnc_url_t;
 
-static struct {
-  pthread_mutex_t lock;
-  pthread_cond_t changed;
-  int viewers;
-  uint64_t idle_since;
+// What one controller last said, under the lock.
+typedef struct {
+  fluidnc_controller_t controller;
   bool connected;
-  unsigned seq;
   uint64_t heard_at;
   char status[FLUIDNC_LINE];
   char wco[128];
@@ -78,6 +78,16 @@ static struct {
   char board[128];      // "MKS DLC32", from `$/board`
   char firmware[64];    // "FluidNC v3.7.8", from `$I`
   char error[FLUIDNC_ERROR];
+} fluidnc_machine_t;
+
+static struct {
+  pthread_mutex_t lock;
+  pthread_cond_t changed;
+  int viewers;
+  uint64_t idle_since;
+  unsigned seq;
+  int count;
+  fluidnc_machine_t machines[FLUIDNC_MAX];
 } fluidnc = {
   .lock = PTHREAD_MUTEX_INITIALIZER,
   .changed = PTHREAD_COND_INITIALIZER,
@@ -92,11 +102,46 @@ static uint64_t now_ms()
   return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
-static void fluidnc_set_error(const char *error)
+// The next of a list's items, which are split at commas, and at the `;`
+// between the values of an option given more than once; NULL at its end.
+static const char *fluidnc_item(const char *list, char *item, size_t len)
+{
+  if (!*list)
+    return NULL;
+
+  size_t item_len = strcspn(list, ",;");
+  snprintf(item, len, "%.*s", (int)item_len, list);
+  list += item_len;
+  return *list ? list + 1 : list;
+}
+
+int fluidnc_controllers(fluidnc_controller_t *out, int max)
+{
+  const char *urls = fluidnc_options.url, *names = fluidnc_options.name;
+  char url[sizeof(out->url)];
+  int count = 0;
+
+  while (count < max && (urls = fluidnc_item(urls, url, sizeof(url)))) {
+    // A name left empty, or none given that far, and the page names it.
+    char name[sizeof(out->name)] = "";
+    if (names)
+      names = fluidnc_item(names, name, sizeof(name));
+
+    // "a.local,,b.local": no controller there, but its place in the names.
+    if (!url[0])
+      continue;
+    snprintf(out[count].url, sizeof(out[count].url), "%s", url);
+    snprintf(out[count].name, sizeof(out[count].name), "%s", name);
+    count++;
+  }
+  return count;
+}
+
+static void fluidnc_set_error(fluidnc_machine_t *m, const char *error)
 {
   pthread_mutex_lock(&fluidnc.lock);
-  snprintf(fluidnc.error, sizeof(fluidnc.error), "%s", error);
-  fluidnc.connected = false;
+  snprintf(m->error, sizeof(m->error), "%s", error);
+  m->connected = false;
   fluidnc.seq++;
   pthread_cond_broadcast(&fluidnc.changed);
   pthread_mutex_unlock(&fluidnc.lock);
@@ -177,7 +222,7 @@ static int fluidnc_send(int fd, int opcode, const char *data, size_t len)
   return send(fd, frame, 6 + len, MSG_NOSIGNAL) == (ssize_t)(6 + len) ? 0 : -1;
 }
 
-static int fluidnc_connect(fluidnc_url_t *url, char *leftover, size_t *leftover_len)
+static int fluidnc_connect(fluidnc_machine_t *m, fluidnc_url_t *url, char *leftover, size_t *leftover_len)
 {
   char host[256], error[FLUIDNC_ERROR];
   struct addrinfo hints = { .ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM }, *addrs = NULL;
@@ -190,7 +235,7 @@ static int fluidnc_connect(fluidnc_url_t *url, char *leftover, size_t *leftover_
   int ret = getaddrinfo(host, url->port, &hints, &addrs);
   if (ret) {
     snprintf(error, sizeof(error), "Cannot resolve %s: %s", host, gai_strerror(ret));
-    fluidnc_set_error(error);
+    fluidnc_set_error(m, error);
     return -1;
   }
 
@@ -214,7 +259,7 @@ static int fluidnc_connect(fluidnc_url_t *url, char *leftover, size_t *leftover_
   freeaddrinfo(addrs);
 
   if (fd < 0) {
-    fluidnc_set_error(error);
+    fluidnc_set_error(m, error);
     return -1;
   }
 
@@ -278,7 +323,7 @@ static int fluidnc_connect(fluidnc_url_t *url, char *leftover, size_t *leftover_
 
 error:
   close(fd);
-  fluidnc_set_error(error);
+  fluidnc_set_error(m, error);
   return -1;
 }
 
@@ -298,41 +343,41 @@ static void fluidnc_keep(const char *line, const char *field, char *value, size_
 
 // A line of the console. A status report is kept; anything else only says
 // the socket is alive.
-static void fluidnc_line(const char *line)
+static void fluidnc_line(fluidnc_machine_t *m, const char *line)
 {
   size_t len = strlen(line);
 
   pthread_mutex_lock(&fluidnc.lock);
-  fluidnc.heard_at = now_ms();
+  m->heard_at = now_ms();
 
   if (len >= 2 && line[0] == '<' && line[len - 1] == '>') {
-    snprintf(fluidnc.status, sizeof(fluidnc.status), "%s", line);
+    snprintf(m->status, sizeof(m->status), "%s", line);
 
     // The work offset and the overrides come in every few reports, not in
     // each; they are kept, or a viewer that missed that one report could
     // give neither work positions nor the feed override.
-    fluidnc_keep(line, "|WCO:", fluidnc.wco, sizeof(fluidnc.wco));
-    fluidnc_keep(line, "|Ov:", fluidnc.ov, sizeof(fluidnc.ov));
+    fluidnc_keep(line, "|WCO:", m->wco, sizeof(m->wco));
+    fluidnc_keep(line, "|Ov:", m->ov, sizeof(m->ov));
 
     fluidnc.seq++;
     pthread_cond_broadcast(&fluidnc.changed);
   } else if (!strncmp(line, "$/board=", 8)) {
-    snprintf(fluidnc.board, sizeof(fluidnc.board), "%s", line + 8);
+    snprintf(m->board, sizeof(m->board), "%s", line + 8);
   } else if (!strncmp(line, "[VER:", 5)) {
     // "[VER:3.7 FluidNC v3.7.8:]": the build, then the firmware's name.
     const char *name = strchr(line, ' ');
-    snprintf(fluidnc.firmware, sizeof(fluidnc.firmware), "%s", name ? name + 1 : line + 5);
-    fluidnc.firmware[strcspn(fluidnc.firmware, ":]")] = 0;
+    snprintf(m->firmware, sizeof(m->firmware), "%s", name ? name + 1 : line + 5);
+    m->firmware[strcspn(m->firmware, ":]")] = 0;
   }
 
   pthread_mutex_unlock(&fluidnc.lock);
 }
 
 // The board and the firmware, if not yet known: two lines of the console.
-static int fluidnc_ask_info(int fd)
+static int fluidnc_ask_info(fluidnc_machine_t *m, int fd)
 {
   pthread_mutex_lock(&fluidnc.lock);
-  bool known = fluidnc.board[0] && fluidnc.firmware[0];
+  bool known = m->board[0] && m->firmware[0];
   pthread_mutex_unlock(&fluidnc.lock);
 
   if (known)
@@ -347,14 +392,14 @@ typedef struct {
   size_t len;
 } fluidnc_line_t;
 
-static void fluidnc_line_add(fluidnc_line_t *line, char c)
+static void fluidnc_line_add(fluidnc_machine_t *m, fluidnc_line_t *line, char c)
 {
   if (c == '\n') {
     line->text[line->len] = 0;
     // Trim the \r a console line ends with.
     while (line->len > 0 && line->text[line->len - 1] == '\r')
       line->text[--line->len] = 0;
-    fluidnc_line(line->text);
+    fluidnc_line(m, line->text);
     line->len = 0;
   } else if (line->len < sizeof(line->text) - 1) {
     line->text[line->len++] = c;
@@ -368,6 +413,7 @@ static void fluidnc_line_add(fluidnc_line_t *line, char c)
 // text messages, each one whole and without a newline, so text and binary
 // are put together into lines apart.
 typedef struct {
+  fluidnc_machine_t *machine;
   unsigned char header[14];
   size_t header_len;
   uint64_t remaining;
@@ -397,7 +443,7 @@ static int fluidnc_frame_end(int fd, fluidnc_reader_t *r)
   case 0x2:
   case 0x0:
     if (r->fin && r->text_message)
-      fluidnc_line_add(&r->text, '\n');
+      fluidnc_line_add(r->machine, &r->text, '\n');
     break;
   }
   return 0;
@@ -455,7 +501,7 @@ static int fluidnc_read(int fd, fluidnc_reader_t *r, const unsigned char *data, 
       if (r->control_len < sizeof(r->control))
         r->control[r->control_len++] = c;
     } else {
-      fluidnc_line_add(r->text_message ? &r->text : &r->binary, c);
+      fluidnc_line_add(r->machine, r->text_message ? &r->text : &r->binary, c);
     }
 
     if (--r->remaining == 0 && fluidnc_frame_end(fd, r) < 0)
@@ -486,19 +532,18 @@ static void fluidnc_wait_for_viewers(unsigned delay_ms)
 
 static void *fluidnc_thread(void *arg)
 {
+  fluidnc_machine_t *m = arg;
   fluidnc_url_t url;
   unsigned retries = 0;
   unsigned delay_ms = 0;
 
-  if (fluidnc_parse_url(fluidnc_options.url, &url) < 0) {
+  if (fluidnc_parse_url(m->controller.url, &url) < 0) {
     char error[FLUIDNC_ERROR];
-    snprintf(error, sizeof(error), "Not a FluidNC address: %s", fluidnc_options.url);
+    snprintf(error, sizeof(error), "Not a FluidNC address: %s", m->controller.url);
     LOG_INFO(NULL, "%s", error);
-    fluidnc_set_error(error);
+    fluidnc_set_error(m, error);
     return NULL;
   }
-
-  srand(time(NULL) ^ getpid());
 
   while (true) {
     fluidnc_wait_for_viewers(delay_ms);
@@ -506,32 +551,32 @@ static void *fluidnc_thread(void *arg)
     char leftover[2048];
     size_t leftover_len = 0;
 
-    int fd = fluidnc_connect(&url, leftover, &leftover_len);
+    int fd = fluidnc_connect(m, &url, leftover, &leftover_len);
     if (fd < 0) {
       delay_ms = fluidnc_retry_ms[retries < 3 ? retries : 3];
       retries++;
-      LOG_INFO(NULL, "FluidNC: %s. Trying again in %u s.", fluidnc.error, delay_ms / 1000);
+      LOG_INFO(NULL, "FluidNC %s: %s. Trying again in %u s.", url.host, m->error, delay_ms / 1000);
       continue;
     }
 
-    LOG_INFO(NULL, "FluidNC: Connected to %s:%s%s (%s).", url.host, url.port, url.path, url.protocol);
+    LOG_INFO(NULL, "FluidNC %s: Connected to %s:%s%s (%s).", url.host, url.host, url.port, url.path, url.protocol);
 
     pthread_mutex_lock(&fluidnc.lock);
-    fluidnc.connected = true;
-    fluidnc.error[0] = 0;
-    fluidnc.status[0] = 0;  // what it said before the drop is not what it says now
-    fluidnc.heard_at = now_ms();
+    m->connected = true;
+    m->error[0] = 0;
+    m->status[0] = 0;  // what it said before the drop is not what it says now
+    m->heard_at = now_ms();
     fluidnc.seq++;
     pthread_cond_broadcast(&fluidnc.changed);
     pthread_mutex_unlock(&fluidnc.lock);
 
-    fluidnc_reader_t reader = { 0 };
+    fluidnc_reader_t reader = { .machine = m };
     uint64_t asked_at = now_ms();
     const char *error = NULL;
     char why[FLUIDNC_ERROR];
 
     fluidnc_send(fd, 0x1, "?", 1);
-    fluidnc_ask_info(fd);
+    fluidnc_ask_info(m, fd);
     uint64_t info_asked_at = now_ms();
     if (fluidnc_read(fd, &reader, (unsigned char *)leftover, leftover_len) < 0)
       error = "The controller closed the connection";
@@ -554,14 +599,14 @@ static void *fluidnc_thread(void *arg)
 
       uint64_t now = now_ms();
       pthread_mutex_lock(&fluidnc.lock);
-      uint64_t quiet = now - fluidnc.heard_at;
+      uint64_t quiet = now - m->heard_at;
       bool idle = fluidnc.viewers == 0 && now - fluidnc.idle_since > FLUIDNC_IDLE_MS;
-      bool may_ask = !strncmp(fluidnc.status, "<Idle", 5) || !strncmp(fluidnc.status, "<Alarm", 6);
+      bool may_ask = !strncmp(m->status, "<Idle", 5) || !strncmp(m->status, "<Alarm", 6);
       pthread_mutex_unlock(&fluidnc.lock);
 
       if (may_ask && now - info_asked_at > FLUIDNC_INFO_MS) {
         info_asked_at = now;
-        fluidnc_ask_info(fd);
+        fluidnc_ask_info(m, fd);
       }
 
       if (idle) {
@@ -587,23 +632,38 @@ static void *fluidnc_thread(void *arg)
       // over, as a browser that heard something would.
       delay_ms = fluidnc_retry_ms[0];
       retries = 1;
-      LOG_INFO(NULL, "FluidNC: %s. Trying again in %u s.", error, delay_ms / 1000);
-      fluidnc_set_error(error);
+      LOG_INFO(NULL, "FluidNC %s: %s. Trying again in %u s.", url.host, error, delay_ms / 1000);
+      fluidnc_set_error(m, error);
     } else {
-      LOG_INFO(NULL, "FluidNC: Nobody watching; disconnected.");
+      LOG_INFO(NULL, "FluidNC %s: Nobody watching; disconnected.", url.host);
       delay_ms = 0;
       retries = 0;
-      fluidnc_set_error("");
+      fluidnc_set_error(m, "");
     }
   }
   return NULL;
 }
 
+// A thread a controller, each with its own socket: one that cannot be
+// reached holds up none of the others.
 static void fluidnc_start()
 {
-  pthread_t thread;
-  pthread_create(&thread, NULL, fluidnc_thread, NULL);
-  pthread_detach(thread);
+  fluidnc_controller_t controllers[FLUIDNC_MAX];
+  int count = fluidnc_controllers(controllers, FLUIDNC_MAX);
+
+  srand(time(NULL) ^ getpid());
+
+  pthread_mutex_lock(&fluidnc.lock);
+  for (int i = 0; i < count; i++)
+    fluidnc.machines[i].controller = controllers[i];
+  fluidnc.count = count;
+  pthread_mutex_unlock(&fluidnc.lock);
+
+  for (int i = 0; i < count; i++) {
+    pthread_t thread;
+    pthread_create(&thread, NULL, fluidnc_thread, &fluidnc.machines[i]);
+    pthread_detach(thread);
+  }
 }
 
 void json_string(FILE *stream, const char *s)
@@ -659,32 +719,33 @@ void http_fluidnc_events(http_worker_t *worker, FILE *stream)
 
     seen = fluidnc.seq;
     int viewers = fluidnc.viewers;
-    bool connected = fluidnc.connected;
-    uint64_t age = now_ms() - fluidnc.heard_at;
-    char status[FLUIDNC_LINE], wco[128], ov[64], board[128], firmware[64], error[FLUIDNC_ERROR];
-    strcpy(status, connected ? fluidnc.status : "");
-    strcpy(wco, fluidnc.wco);
-    strcpy(ov, fluidnc.ov);
-    strcpy(board, fluidnc.board);
-    strcpy(firmware, fluidnc.firmware);
-    strcpy(error, fluidnc.error);
+    int count = fluidnc.count;
+    uint64_t now = now_ms();
+    fluidnc_machine_t machines[FLUIDNC_MAX];
+    memcpy(machines, fluidnc.machines, count * sizeof(*machines));
     pthread_mutex_unlock(&fluidnc.lock);
 
     // Written without the lock: a viewer whose network is slow holds up
-    // nobody but itself.
-    fprintf(stream, "data: {\"viewers\":%d,\"connected\":%s,\"age\":%llu,\"status\":",
-      viewers, connected ? "true" : "false", connected ? (unsigned long long)age : 0ULL);
-    json_string(stream, status);
-    fputs(",\"wco\":", stream);
-    json_string(stream, wco);
-    fputs(",\"ov\":", stream);
-    json_string(stream, ov);
-    fputs(",\"board\":", stream);
-    json_string(stream, board);
-    fputs(",\"firmware\":", stream);
-    json_string(stream, firmware);
-    fputs(",\"error\":", stream);
-    json_string(stream, error);
+    // nobody but itself. The controllers come in -fluidnc-url's order.
+    fprintf(stream, "data: {\"viewers\":%d,\"machines\":[", viewers);
+    for (int i = 0; i < count; i++) {
+      fluidnc_machine_t *m = &machines[i];
+      fprintf(stream, "%s{\"connected\":%s,\"age\":%llu,\"status\":", i ? "," : "",
+        m->connected ? "true" : "false", m->connected ? (unsigned long long)(now - m->heard_at) : 0ULL);
+      json_string(stream, m->connected ? m->status : "");
+      fputs(",\"wco\":", stream);
+      json_string(stream, m->wco);
+      fputs(",\"ov\":", stream);
+      json_string(stream, m->ov);
+      fputs(",\"board\":", stream);
+      json_string(stream, m->board);
+      fputs(",\"firmware\":", stream);
+      json_string(stream, m->firmware);
+      fputs(",\"error\":", stream);
+      json_string(stream, m->error);
+      fputc('}', stream);
+    }
+    fputc(']', stream);
     fputs(",\"server\":", stream);
     server_stats_json(stream);
     fputs(",\"battery\":", stream);

@@ -164,8 +164,8 @@ option_t all_options[] = {
   DEFINE_OPTION_DEFAULT(webrtc, disable_client_ice, bool, "1", "Ignore ICE servers provided in '/webrtc' request."),
   DEFINE_OPTION_DEFAULT(webrtc, timeout_s, ulong, "3600", "Set how long to keep a WebRTC stream alive before disconnecting by default."),
 
-  DEFINE_OPTION_PTR(fluidnc, url, string, "Connect to this FluidNC controller and show its telemetry over the stream on `/telemetry`. Ex.: `-fluidnc-url=fluidnc.local`"),
-  DEFINE_OPTION_PTR(fluidnc, name, string, "Name the FluidNC controller on `/telemetry`. Defaults to its host name."),
+  DEFINE_OPTION_PTR(fluidnc, url, list, "Connect to these FluidNC controllers, up to 8, and show their telemetry over the stream on `/telemetry`. Ex.: `-fluidnc-url=fluidnc.local` or `-fluidnc-url=a.local,b.local`"),
+  DEFINE_OPTION_PTR(fluidnc, name, list, "Name the FluidNC controllers on `/telemetry`, in the same order. Each defaults to its host name. Ex.: `-fluidnc-name=Testikel,Brushograph`"),
 
   DEFINE_OPTION_PTR(victron, mac, string, "Listen for this Victron battery monitor's Instant Readout over Bluetooth and show it on `/telemetry`. Ex.: `-victron-mac=d4:12:34:56:78:9a`"),
   DEFINE_OPTION_PTR(victron, key, string, "The Instant Readout encryption key, as VictronConnect shows it under Product info."),

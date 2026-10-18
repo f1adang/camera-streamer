@@ -12,7 +12,7 @@ All streams are exposed over very simple HTTP server, providing different stream
 - `http://<ip>:8080/video` - provide automated video.mp4 or video.hls stream depending on browser used
 - `http://<ip>:8080/video.mp4` or `http://<ip>:8080/video.mkv` - provide remuxed `mkv` or `mp4` stream (uses `ffmpeg` to remux, works as of now only in Desktop Chrome and Safari)
 - `http://<ip>:8080/webrtc` - provide WebRTC feed
-- `http://<ip>:8080/telemetry` - provide MJPEG stream with FluidNC telemetry laid over it
+- `http://<ip>:8080/telemetry` - provide MJPEG stream with the telemetry of one or more FluidNC controllers laid over it
 
 ## WebRTC support
 
@@ -32,6 +32,17 @@ controller has read. Give the controller with:
 - `--fluidnc-url=fluidnc.local` (or an address and port, `http://192.168.1.20`, `192.168.1.20:81`)
 - `--fluidnc-name=Testikel` to name it in the box over the picture; without it, the box shows the host name, less `.local`
 
+Several controllers, a Brushograph each, are watched at once by listing them, separated by
+commas or by giving the option again, up to eight; the names go in the same order, and one
+left empty is the host name:
+
+- `--fluidnc-url=testikel.local,brushograph-2.local,192.168.1.30:81`
+- `--fluidnc-name=Testikel,,Pinky`
+
+Each has a box of its own, side by side over the picture's bottom left corner, lettered
+smaller the more there are, and one under the other when the picture is narrow. A
+controller that cannot be reached says why in its box, and the others carry on.
+
 The page comes in the themes of the Brushograph WebUI, picked at its foot and remembered by the
 browser: h4xx0r (the default, glitches and all, full screen included), Default, Dark mode,
 Coconut mode, Pinkograph, UwU and Bruschologischer Kongress, which speaks German.
@@ -41,11 +52,13 @@ wherever `/stream` does, through a proxy included; only camera-streamer has to r
 the controller. It relays the status reports as server-sent events on
 `http://<ip>:8080/fluidnc`:
 
-    data: {"viewers":2,"connected":true,"age":120,"status":"<Run|MPos:89.032,122.430,44.991|FS:494,0|SD:65.13,/sd/a.gcode>","wco":"-3.000,-14.000,46.000","ov":"100,100,100","board":"MKS DLC32 V2.1","firmware":"FluidNC v3.7.8","error":"","server":{"model":"Raspberry Pi Zero 2 W Rev 1.0","soc":"BCM2837","cpu_cores":4,"cpu":"Cortex-A53","cpu_max_mhz":1000,"ram_mb":512,"camera":"Sony IMX219","throttled":0,"temp":52.1,…}}
+    data: {"viewers":2,"machines":[{"connected":true,"age":120,"status":"<Run|MPos:89.032,122.430,44.991|FS:494,0|SD:65.13,/sd/a.gcode>","wco":"-3.000,-14.000,46.000","ov":"100,100,100","board":"MKS DLC32 V2.1","firmware":"FluidNC v3.7.8","error":""}],"server":{"model":"Raspberry Pi Zero 2 W Rev 1.0","soc":"BCM2837","cpu_cores":4,"cpu":"Cortex-A53","cpu_max_mhz":1000,"ram_mb":512,"camera":"Sony IMX219","throttled":0,"temp":52.1,…}}
 
 `viewers` is the number of `/fluidnc` responses open, that is, of `/telemetry` pages being
-looked at (a hidden tab lets go), and is sent with or without a controller. `status` is the
-latest report as the controller sent it, and `wco` and `ov` the work offset and the overrides
+looked at (a hidden tab lets go), and is sent with or without a controller. `machines` has
+one entry a controller, in the order of `--fluidnc-url`, which is the order `/status` lists
+them in under `fluidnc`, each with its `url` and `name`; it is empty without one. Of each,
+`status` is the latest report as the controller sent it, and `wco` and `ov` the work offset and the overrides
 from the last report that carried them, since FluidNC sends those only every few reports.
 `board` and `firmware` are what the controller is, shown under its name: `$/board` from its
 config and the firmware from `$I`, asked once a connection, and again every thirty seconds
@@ -65,7 +78,7 @@ loopback, the stream's frames per second, and the uptime. They are read from `/p
 with every report, and at least once a second. Behind nginx, `X-Accel-Buffering: no` is sent
 so the events are not held back; other proxies need response buffering off for `/fluidnc`.
 
-One websocket to the controller is shared by every viewer, and held only while somebody
+One websocket to each controller is shared by every viewer, and held only while somebody
 watches: FluidNC keeps four websockets and drops the oldest for a fifth. It is closed ten
 seconds after the last viewer leaves. While the machine moves, FluidNC sends a report every
 200 ms by itself; standing still, camera-streamer asks with `?` after four quiet seconds, and
@@ -74,7 +87,7 @@ controller cannot be reached. The WebUI 3 socket (`ws://<host>/`) is used, or We
 (`ws://<host>:81/`) when the URL names port 81.
 
 Each viewer of `/telemetry` holds two HTTP connections, `/stream` and `/fluidnc`, out of
-`--http-maxcons` (10 by default).
+`--http-maxcons` (10 by default), however many controllers there are.
 
 ### Victron battery monitor or solar charger
 

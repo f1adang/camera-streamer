@@ -189,10 +189,20 @@ main { width: 100%; max-width: 1400px; margin: 0 auto; padding: 18px 16px 28px; 
   position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 24px);
   padding: .55em .8em; border-radius: 6px; border: 1px solid var(--line);
   background: color-mix(in srgb, var(--sheet) 86%, transparent);
-  color: var(--ink); font: clamp(12px, 1.7cqi, 30px)/1.3 var(--mono);
+  color: var(--ink); font: clamp(12px, calc(1.7cqi * var(--box-scale, 1)), 30px)/1.3 var(--mono);
 }
 /* With no picture behind it, it stands in the frame rather than in a corner. */
 .watch-overlay.alone { position: static; margin: 24px; }
+/* The machines, a box each, side by side over the bottom left corner and as
+   many to a row as fit. More than one, and each is lettered smaller
+   (--box-scale, from the page) so that three fit beside each other. */
+.watch-machines {
+  position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 24px);
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px;
+}
+.watch-machines > .watch-overlay { position: static; max-width: none; min-width: 0; }
+.watch-machines.many > .watch-overlay { max-width: 26em; }
+.watch-machines.alone { position: static; margin: 24px; }
 .watch-overlay p { margin: 0; }
 .watch-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 1.2em; }
 .watch-name { font-weight: 650; letter-spacing: .02em; }
@@ -277,15 +287,20 @@ button:hover { border-color: var(--ink-dim); }
    phone held either way: on its side, it is as wide as the window is high.
    Stronger than any theme's box, which is drawn for over the picture. */
 @container (max-width: 640px) {
-  :root[data-theme] .watch > .watch-overlay {
+  .watch > .watch-machines { position: static; display: block; width: 100%; max-width: none; margin: 0; }
+  :root[data-theme] .watch > .watch-overlay,
+  :root[data-theme] .watch-machines > .watch-overlay {
     position: static; max-width: none; width: 100%; margin: 0;
     border-width: 0; border-top: 1px solid var(--line); border-radius: 0;
     box-shadow: none; background: var(--sheet);
     padding: .5em .8em .6em; font-size: 13px;
   }
-  :root[data-theme] .watch > .watch-overlay.alone { border-top: 0; }
-  :root[data-theme="h4xx0r"] .watch > .watch-overlay { font-size: 18px; border-top: 3px double var(--double); }
-  :root[data-theme="kongress"] .watch > .watch-overlay { font-size: 14px; border-top: 2px solid #000; }
+  :root[data-theme] .watch > .watch-overlay.alone,
+  :root[data-theme] .watch-machines.alone > .watch-overlay:first-child { border-top: 0; }
+  :root[data-theme="h4xx0r"] .watch > .watch-overlay,
+  :root[data-theme="h4xx0r"] .watch-machines > .watch-overlay { font-size: 18px; border-top: 3px double var(--double); }
+  :root[data-theme="kongress"] .watch > .watch-overlay,
+  :root[data-theme="kongress"] .watch-machines > .watch-overlay { font-size: 14px; border-top: 2px solid #000; }
   .watch-pos { gap: .8em; }
   .watch-pos dd { min-width: 6ch; font-size: 1.25em; }
   /* Under the picture there is the room for two figures a line. */
@@ -450,7 +465,7 @@ button:hover { border-color: var(--ink-dim); }
 :root[data-theme="h4xx0r"] .watch:fullscreen { border: 0; box-shadow: none; }
 :root[data-theme="h4xx0r"] .watch-overlay {
   padding: .4em .7em .5em; background: rgba(6,16,9,.84);
-  font: clamp(17px, 2.3cqi, 40px)/1.15 var(--mono);
+  font: clamp(17px, calc(2.3cqi * var(--box-scale, 1)), 40px)/1.15 var(--mono);
 }
 :root[data-theme="h4xx0r"] .watch-name { font: .75em/1.5 var(--pixel); color: var(--phosphor); letter-spacing: .08em; }
 :root[data-theme="h4xx0r"] .watch-meta { font-size: .8em; }
@@ -554,7 +569,8 @@ button:hover { border-color: var(--ink-dim); }
 :root[data-theme="h4xx0r"] body > main,
 :root[data-theme="h4xx0r"] body > footer,
 :root[data-theme="h4xx0r"] .watch:fullscreen > img,
-:root[data-theme="h4xx0r"] .watch:fullscreen > .watch-overlay {
+:root[data-theme="h4xx0r"] .watch:fullscreen > .watch-overlay,
+:root[data-theme="h4xx0r"] .watch:fullscreen > .watch-machines {
   animation: h4x-signal 9s linear infinite, h4x-jitter 2.3s steps(1) infinite,
              h4x-power-on 1.1s cubic-bezier(.2,.9,.3,1);
 }
@@ -675,24 +691,29 @@ button:hover { border-color: var(--ink-dim); }
   <figure class="watch" id="watch">
     <img id="watch-video" hidden>
     <p class="watch-empty" id="watch-empty" hidden></p>
-    <div class="watch-overlay" id="watch-overlay">
-      <div class="watch-head">
-        <p class="watch-name" id="watch-name"></p>
-        <p class="watch-meta"><span id="watch-clock"></span><span id="watch-viewers" hidden></span></p>
-      </div>
-      <p class="watch-model" id="watch-board"></p>
-      <div class="watch-machine" id="watch-machine" hidden>
-        <p class="watch-state"><b id="watch-state"></b><span id="watch-feed"></span></p>
-        <dl class="watch-pos">
-          <div><dt>X</dt><dd id="watch-x">–</dd></div>
-          <div><dt>Y</dt><dd id="watch-y">–</dd></div>
-          <div><dt>Z</dt><dd id="watch-z">–</dd></div>
-        </dl>
-        <p class="watch-frame" id="watch-frame"></p>
-        <div class="watch-job" id="watch-job" hidden>
-          <p class="watch-file"><b id="watch-file"></b><span id="watch-pct"></span></p>
-          <div class="watch-bar"><i id="watch-bar"></i></div>
-          <p class="watch-ascii" id="watch-ascii"></p>
+    <!-- A box a machine; this one is copied for each controller after the
+         first, less the clock and the viewers, which it alone carries. -->
+    <div class="watch-machines" id="machines">
+      <div class="watch-overlay">
+        <div class="watch-head">
+          <p class="watch-name"></p>
+          <p class="watch-meta"><span id="watch-clock"></span><span id="watch-viewers" hidden></span></p>
+        </div>
+        <p class="watch-model watch-board"></p>
+        <div class="watch-machine" hidden>
+          <p class="watch-state"><b></b><span></span></p>
+          <dl class="watch-pos">
+            <div><dt>X</dt><dd>–</dd></div>
+            <div><dt>Y</dt><dd>–</dd></div>
+            <div><dt>Z</dt><dd>–</dd></div>
+          </dl>
+          <p class="watch-frame"></p>
+          <div class="watch-job" hidden>
+            <p class="watch-file"><b></b><span></span></p>
+            <div class="watch-bar"><i></i></div>
+            <p class="watch-ascii"></p>
+          </div>
+          <p class="watch-note"></p>
         </div>
       </div>
     </div>
@@ -797,9 +818,10 @@ button:hover { border-color: var(--ink-dim); }
  * the state (Running, Paused, Alarm …), the feed, X, Y and Z, the file and
  * how far through it the card has read.
  *
- * The controller is -fluidnc-url, and Brušocam talks to it, not this page:
- * the browser may be outside, through a proxy, where the controller cannot be
- * reached. /fluidnc relays its status reports as server-sent events, one
+ * The controllers are -fluidnc-url's, a Brushograph each and a box each,
+ * side by side, and Brušocam talks to them, not this page: the browser may be
+ * outside, through a proxy, where they cannot be reached. /fluidnc relays
+ * their status reports as server-sent events, one
  * long-lived response as /stream is, with the latest report and the work
  * offset, which the controller sends only every few reports. An event comes
  * at least every second, so silence means Brušocam has gone, and the
@@ -968,6 +990,7 @@ const DE = {
   "{file} · all sent": "{file} · vollständig übertragen",
   "{file} · stopped at {pct}%": "{file} · abgebrochen bei {pct} %",
   "Watching {machine}.": "{machine} wird beobachtet.",
+  "Watching {machines}.": "{machines} werden beobachtet.",
   "{error}. Brušocam keeps trying.": "{error}. Brušocam versucht es weiter.",
   "Brušocam is connecting to {machine}.": "Brušocam verbindet sich mit {machine}.",
   "Brušocam is not answering. Trying again.": "Brušocam antwortet nicht. Neuer Versuch.",
@@ -1070,17 +1093,10 @@ const CLOCKS = {
   const fig = $("watch");
   const img = $("watch-video");
   const empty = $("watch-empty");
-  const overlay = $("watch-overlay");
+  const boxes = $("machines");
   const note = $("watch-note");
-  const stateLine = fig.querySelector(".watch-state");
-  const show = {
-    machine: $("watch-machine"), clock: $("watch-clock"), viewers: $("watch-viewers"),
-    name: $("watch-name"), state: $("watch-state"), feed: $("watch-feed"), frame: $("watch-frame"),
-    x: $("watch-x"), y: $("watch-y"), z: $("watch-z"),
-    job: $("watch-job"), file: $("watch-file"), pct: $("watch-pct"),
-    bar: $("watch-bar"), ascii: $("watch-ascii"),
-  };
-  say(show.state, "Connecting…");
+  const clock = $("watch-clock");
+  const viewers = $("watch-viewers");
 
   // What this camera was started with.
   let status = {};
@@ -1090,18 +1106,51 @@ const CLOCKS = {
   } catch (e) { /* the stream may still be there; the events will say */ }
   if (status.version) $("version").textContent = status.version;
 
-  const fluidnc = status.fluidnc || {};
-  const host = fluidnc.url ? hostOf(fluidnc.url) : "";
-  const machine = fluidnc.name || nameOf(host);
   const streamOn = !(status.outputs && status.outputs.stream && status.outputs.stream.enabled === false);
 
-  if (host) {
+  /* The machines, in the order of -fluidnc-url, which is the order of the
+     events' machines. The first box is in the page; each after it is a copy,
+     made before anything is said in it, so say() knows its every line. */
+  const controllers = Array.isArray(status.fluidnc) ? status.fluidnc.filter((c) => c.url) : [];
+  const first = boxes.firstElementChild;
+  const machines = controllers.map((c, i) => {
+    const box = i ? first.cloneNode(true) : first;
+    if (i) {
+      box.querySelector(".watch-meta").remove();
+      boxes.append(box);
+    }
+    const q = (sel) => box.querySelector(sel);
+    const host = hostOf(c.url);
+    const [x, y, z] = box.querySelectorAll(".watch-pos dd");
+    return {
+      host, name: c.name || nameOf(host),
+      job: null,     // the last file seen running, kept after it ends
+      show: {
+        machine: q(".watch-machine"), name: q(".watch-name"), board: q(".watch-board"),
+        stateLine: q(".watch-state"), state: q(".watch-state b"), feed: q(".watch-state span"),
+        frame: q(".watch-frame"), x, y, z,
+        job: q(".watch-job"), file: q(".watch-file b"), pct: q(".watch-file span"),
+        bar: q(".watch-bar i"), ascii: q(".watch-ascii"), note: q(".watch-machine .watch-note"),
+      },
+    };
+  });
+  // Three boxes beside each other are lettered smaller than one alone.
+  boxes.classList.toggle("many", machines.length > 1);
+  boxes.style.setProperty("--box-scale", Math.min(1, 1.8 / Math.max(1, machines.length)));
+
+  if (machines.length) {
     const sub = $("sub");
     sub.append(" · FluidNC ");
-    const b = document.createElement("b");
-    b.textContent = host;
-    sub.append(b);
-    show.name.textContent = machine;
+    machines.forEach((m, i) => {
+      if (i) sub.append(", ");
+      const b = document.createElement("b");
+      b.textContent = m.host;
+      sub.append(b);
+    });
+  }
+  for (const m of machines) {
+    m.show.name.textContent = m.name;
+    sayState(m, "Connecting…");
   }
 
   const full = $("watch-full");
@@ -1123,7 +1172,7 @@ const CLOCKS = {
   function cameraAlone(alone, text, vars) {
     img.hidden = alone;
     empty.hidden = !alone;
-    overlay.classList.toggle("alone", alone);
+    boxes.classList.toggle("alone", alone);
     $("server").classList.toggle("alone", alone);
     $("site").classList.toggle("alone", alone);
     if (alone) say(empty, text, vars);
@@ -1167,24 +1216,24 @@ const CLOCKS = {
   /* ---- the machine ---- */
   let events = null;
   let eventAt = 0;
-  let job = null;       // the last file seen running, kept after it ends
 
-  function sayState(text, bad) {
-    say(show.state, text);
-    stateLine.classList.toggle("bad", !!bad);
+  function sayState(m, text, bad) {
+    say(m.show.state, text);
+    m.show.stateLine.classList.toggle("bad", !!bad);
   }
 
-  function showJob(pct) {
+  function showJob(show, pct) {
     say(show.pct, "{pct}%", { pct: pct.toFixed(1) });
     show.bar.style.width = `${Math.min(100, pct)}%`;
     say(show.ascii, "{bar} {pct}%", { bar: asciiBar(pct), pct: pct.toFixed(1) });
   }
 
-  function heard(line, wcoText, ovText) {
+  function heard(m, line, wcoText, ovText) {
     if (!/^<.*>$/.test(line)) return;
+    const show = m.show;
     const s = parseStatus(line);
     const kind = s.state.split(":")[0];
-    sayState(STATES[s.state] || STATES[kind] || s.state, BAD.has(kind));
+    sayState(m, STATES[s.state] || STATES[kind] || s.state, BAD.has(kind));
     // The speed it moves at, and the feed override it was dialled to, which
     // like the work offset comes every few reports and is kept by Brušocam.
     const feed = s.FS ? Number(s.FS.split(",")[0]) : s.F ? Number(s.F) : 0;
@@ -1215,10 +1264,11 @@ const CLOCKS = {
       show.z.textContent = pos.length > 2 ? mm(pos[2]) : "–";
     }
 
+    let job = m.job;
     if (s.SD !== undefined) {
-      job = { ...jobOf(s.SD), running: true };
+      job = m.job = { ...jobOf(s.SD), running: true };
       say(show.file, job.file);
-      showJob(job.pct);
+      showJob(show, job.pct);
       show.job.hidden = false;
     } else if (job && job.running) {
       // The report stops naming the file the moment it is closed, at the end
@@ -1228,7 +1278,7 @@ const CLOCKS = {
       job.running = false;
       if (job.pct >= 99) {
         say(show.file, "{file} · all sent", { file: job.file });
-        showJob(100);
+        showJob(show, 100);
       } else {
         say(show.file, "{file} · stopped at {pct}%", { file: job.file, pct: job.pct.toFixed(1) });
       }
@@ -1588,32 +1638,42 @@ const CLOCKS = {
     if (d.battery || d.mobile || d.ap) showSite(d.battery, d.mobile, d.ap);
     if (d.server) showServer(d.server);
     if (typeof d.viewers === "number") {
-      say(show.viewers, d.viewers === 1 ? "{n} viewer" : "{n} viewers", { n: d.viewers });
-      show.viewers.hidden = false;
+      say(viewers, d.viewers === 1 ? "{n} viewer" : "{n} viewers", { n: d.viewers });
+      viewers.hidden = false;
     }
-    if (!host) {
-      say(note, "");    // Brušocam answers again, if it had stopped
-      return;
-    }
-    // MKS DLC32 · FluidNC v3.7.8: the controller's board and firmware.
-    $("watch-board").textContent = [d.board, d.firmware].filter(Boolean).join(" · ");
-    if (d.connected) {
-      say(note, "Watching {machine}.", { machine });
-      if (d.status) heard(d.status, d.wco, d.ov);
-    } else if (d.error) {
-      sayState("Not connected", true);
-      say(note, "{error}. Brušocam keeps trying.", { error: d.error });
-    } else {
-      sayState("Connecting…");
-      say(note, "Brušocam is connecting to {machine}.", { machine });
-    }
+    // Under the picture, the machines being watched; what keeps any other
+    // from it is said in its own box.
+    const watching = [];
+    machines.forEach((m, i) => {
+      const e = (d.machines || [])[i];
+      if (!e) return;
+      // MKS DLC32 · FluidNC v3.7.8: the controller's board and firmware.
+      m.show.board.textContent = [e.board, e.firmware].filter(Boolean).join(" · ");
+      m.show.note.classList.toggle("bad", !e.connected && !!e.error);
+      if (e.connected) {
+        watching.push(m.name);
+        say(m.show.note, "");
+        if (e.status) heard(m, e.status, e.wco, e.ov);
+      } else if (e.error) {
+        sayState(m, "Not connected", true);
+        say(m.show.note, "{error}. Brušocam keeps trying.", { error: e.error });
+      } else {
+        sayState(m, "Connecting…");
+        say(m.show.note, "Brušocam is connecting to {machine}.", { machine: m.name });
+      }
+    });
+    // Brušocam answers again, if it had stopped.
+    if (watching.length > 1) say(note, "Watching {machines}.", { machines: watching.join(", ") });
+    else if (watching.length) say(note, "Watching {machine}.", { machine: watching[0] });
+    else say(note, "");
   }
 
   // The events carry the count of viewers too, so they are listened to with
   // or without a controller; the machine's lines only with one.
   function startMachine() {
-    // Without a controller there is nothing to say about one.
-    show.machine.hidden = !host;
+    // Without a controller there is nothing to say about one: the first box
+    // has the clock and the viewers alone.
+    for (const m of machines) m.show.machine.hidden = false;
     eventAt = Date.now();
     events = new EventSource("fluidnc");
     events.onmessage = onEvent;
@@ -1627,14 +1687,17 @@ const CLOCKS = {
   // Every second there is an event, changed or not; none for a while, and
   // Brušocam itself is not answering. EventSource tries again.
   setInterval(() => {
-    show.clock.textContent = CLOCKS[german() ? "de" : "en"].format(new Date());
+    clock.textContent = CLOCKS[german() ? "de" : "en"].format(new Date());
     if (events && Date.now() - eventAt > QUIET_MS) {
-      show.viewers.hidden = true;
-      if (host) sayState("Not connected", true);
+      viewers.hidden = true;
+      for (const m of machines) {
+        sayState(m, "Not connected", true);
+        say(m.show.note, "");
+      }
       say(note, "Brušocam is not answering. Trying again.");
     }
   }, 1000);
-  show.clock.textContent = CLOCKS[german() ? "de" : "en"].format(new Date());
+  clock.textContent = CLOCKS[german() ? "de" : "en"].format(new Date());
 
   // A tab nobody is looking at stops pulling a stream off the camera, which
   // is a megabyte or so a second, and stops watching, so Brušocam can give

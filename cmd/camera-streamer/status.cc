@@ -16,7 +16,6 @@ extern camera_t *camera;
 extern http_server_options_t http_options;
 extern rtsp_options_t rtsp_options;
 extern webrtc_options_t webrtc_options;
-extern fluidnc_options_t fluidnc_options;
 
 };
 
@@ -194,8 +193,12 @@ extern "C" void camera_status_json(http_worker_t *worker, FILE *stream)
     message["endpoints"]["rtsp"]["dropped"] = rtsp_options.dropped;
   }
 
-  message["fluidnc"]["url"] = fluidnc_options.url;
-  message["fluidnc"]["name"] = fluidnc_options.name;
+  // The controllers, in the order of the events on /fluidnc.
+  fluidnc_controller_t controllers[FLUIDNC_MAX];
+  int count = fluidnc_controllers(controllers, FLUIDNC_MAX);
+  message["fluidnc"] = nlohmann::json::array();
+  for (int i = 0; i < count; i++)
+    message["fluidnc"].push_back({ { "url", controllers[i].url }, { "name", controllers[i].name } });
 
   http_write_response(stream, "200 OK", "application/json", message.dump().c_str(), 0);
 }

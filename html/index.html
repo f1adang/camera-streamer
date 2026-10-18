@@ -61,9 +61,9 @@
 			<a href="telemetry"><b>/telemetry</b></a> (HTTP page)<br>
 			<br>
 			<ul>
-				<li>The MJPEG stream with a FluidNC controller's state, position and running job laid over it.</li>
-				<li>Watches the controller given by <i>-fluidnc-url=</i>. camera-streamer connects to it, so only camera-streamer has to reach it.</li>
-				<li><a href="fluidnc"><b>/fluidnc</b></a> relays its status reports as server-sent events.</li>
+				<li>The MJPEG stream with each FluidNC controller's state, position and running job laid over it.</li>
+				<li>Watches the controllers given by <i>-fluidnc-url=</i>, a comma-separated list. camera-streamer connects to them, so only camera-streamer has to reach them.</li>
+				<li><a href="fluidnc"><b>/fluidnc</b></a> relays their status reports as server-sent events.</li>
 			</ul>
 		</li>
 		<br>
