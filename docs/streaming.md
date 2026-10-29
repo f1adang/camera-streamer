@@ -66,10 +66,11 @@ the controller is idle until it has answered, since FluidNC refuses them during 
 `battery` and `mobile` are the Victron battery monitor and the Teltonika router below, or
 `null` without them. `server` is the health of the host camera-streamer runs on, shown in a
 box over the picture's top left corner (under the picture, when it is narrow) as "Brušocam
-server": the board's model from the device tree, its `soc`, `cpu_cores`, `cpu` (from the CPU
-part in `/proc/cpuinfo`), `cpu_max_mhz` and `ram_mb` (from the Raspberry Pi's revision code),
-the `camera`'s sensor ("Sony IMX219", from its V4L2 subdevice, or a USB camera's own name),
-the Raspberry Pi firmware's `throttled` flags
+server", beside the time where the machine is and the number of viewers: the board's model
+from the device tree, its `soc`, `cpu_cores`, `cpu` (from the CPU part in `/proc/cpuinfo`),
+`cpu_max_mhz` and `ram_mb` (from the Raspberry Pi's revision code), the `camera`'s sensor
+("Sony IMX219", from its V4L2 subdevice, or a USB camera's own name), the Raspberry Pi
+firmware's `throttled` flags
 (under-voltage, clock capped, throttled, soft temperature limit, now and since boot) or, on
 kernels without them, the `undervoltage` alarm, the CPU temperature and clock, the load,
 memory, the Wi-Fi signal in dBm, the bytes sent per second on every interface but the

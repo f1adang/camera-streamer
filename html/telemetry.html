@@ -692,13 +692,10 @@ button:hover { border-color: var(--ink-dim); }
     <img id="watch-video" hidden>
     <p class="watch-empty" id="watch-empty" hidden></p>
     <!-- A box a machine; this one is copied for each controller after the
-         first, less the clock and the viewers, which it alone carries. -->
+         first. -->
     <div class="watch-machines" id="machines">
       <div class="watch-overlay">
-        <div class="watch-head">
-          <p class="watch-name"></p>
-          <p class="watch-meta"><span id="watch-clock"></span><span id="watch-viewers" hidden></span></p>
-        </div>
+        <p class="watch-name"></p>
         <p class="watch-model watch-board"></p>
         <div class="watch-machine" hidden>
           <p class="watch-state"><b></b><span></span></p>
@@ -718,7 +715,10 @@ button:hover { border-color: var(--ink-dim); }
       </div>
     </div>
     <div class="watch-overlay watch-server" id="server" hidden>
-      <p class="watch-name" data-t>Brušocam server</p>
+      <div class="watch-head">
+        <p class="watch-name" data-t>Brušocam server</p>
+        <p class="watch-meta"><span id="watch-clock"></span><span id="watch-viewers" hidden></span></p>
+      </div>
       <p class="watch-model" id="server-model"></p>
       <p class="watch-model" id="server-specs"></p>
       <dl class="watch-stats">
@@ -1115,10 +1115,7 @@ const CLOCKS = {
   const first = boxes.firstElementChild;
   const machines = controllers.map((c, i) => {
     const box = i ? first.cloneNode(true) : first;
-    if (i) {
-      box.querySelector(".watch-meta").remove();
-      boxes.append(box);
-    }
+    if (i) boxes.append(box);
     const q = (sel) => box.querySelector(sel);
     const host = hostOf(c.url);
     const [x, y, z] = box.querySelectorAll(".watch-pos dd");
@@ -1134,6 +1131,8 @@ const CLOCKS = {
       },
     };
   });
+  // Without a controller there is no box at all.
+  boxes.hidden = !machines.length;
   // Three boxes beside each other are lettered smaller than one alone.
   boxes.classList.toggle("many", machines.length > 1);
   boxes.style.setProperty("--box-scale", Math.min(1, 1.8 / Math.max(1, machines.length)));
@@ -1668,11 +1667,9 @@ const CLOCKS = {
     else say(note, "");
   }
 
-  // The events carry the count of viewers too, so they are listened to with
-  // or without a controller; the machine's lines only with one.
+  // The events carry the server and the count of viewers too, so they are
+  // listened to with or without a controller.
   function startMachine() {
-    // Without a controller there is nothing to say about one: the first box
-    // has the clock and the viewers alone.
     for (const m of machines) m.show.machine.hidden = false;
     eventAt = Date.now();
     events = new EventSource("fluidnc");
