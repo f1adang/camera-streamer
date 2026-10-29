@@ -1142,8 +1142,14 @@ const CLOCKS = {
     sub.append(" · FluidNC ");
     machines.forEach((m, i) => {
       if (i) sub.append(", ");
+      // Each to its controller's own page, in a tab of its own.
       const b = document.createElement("b");
-      b.textContent = m.host;
+      const a = document.createElement("a");
+      a.href = `http://${m.host}/`;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = m.host;
+      b.append(a);
       sub.append(b);
     });
   }
